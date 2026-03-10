@@ -1,0 +1,533 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Youth Baseball Draft Tool</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f0f2f5; color: #1a1a2e; line-height: 1.5; }
+  #app { max-width: 1400px; margin: 0 auto; padding: 20px; }
+  h1 { font-size: 1.8em; color: #1a1a2e; margin-bottom: 4px; }
+  h2 { font-size: 1.3em; margin-bottom: 12px; color: #2d3748; }
+  h3 { font-size: 1.1em; margin-bottom: 8px; }
+  .subtitle { color: #666; font-size: 0.95em; margin-bottom: 20px; }
+  button { cursor: pointer; border: none; border-radius: 6px; padding: 10px 20px; font-size: 0.95em; font-weight: 600; transition: background 0.15s, transform 0.1s; }
+  button:active { transform: scale(0.97); }
+  .btn-primary { background: #2563eb; color: #fff; }
+  .btn-primary:hover { background: #1d4ed8; }
+  .btn-danger { background: #dc2626; color: #fff; }
+  .btn-danger:hover { background: #b91c1c; }
+  .btn-secondary { background: #e2e8f0; color: #334155; }
+  .btn-secondary:hover { background: #cbd5e1; }
+  .btn-sm { padding: 6px 14px; font-size: 0.85em; }
+  input, select { border: 1px solid #cbd5e1; border-radius: 6px; padding: 8px 12px; font-size: 0.95em; }
+  input:focus, select:focus { outline: none; border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37,99,235,0.15); }
+  .card { background: #fff; border-radius: 10px; padding: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+
+  /* Setup */
+  .setup-header { text-align: center; margin-bottom: 24px; }
+  .team-count-row { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; justify-content: center; }
+  .teams-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; margin-bottom: 24px; }
+  .team-card input { width: 100%; margin-bottom: 8px; }
+  .team-card label { font-size: 0.85em; color: #64748b; font-weight: 600; display: block; margin-bottom: 2px; }
+  .coach-assign-section { margin-top: 24px; }
+  .coach-assign-section h2 { margin-bottom: 8px; }
+  .coach-assign-table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+  .coach-assign-table th { text-align: left; padding: 8px 10px; background: #f1f5f9; font-size: 0.85em; color: #475569; }
+  .coach-assign-table td { padding: 8px 10px; border-bottom: 1px solid #e2e8f0; font-size: 0.9em; }
+  .coach-assign-table select { width: 100%; }
+  .coach-only-badge { background: #fef3c7; color: #92400e; font-size: 0.75em; padding: 2px 6px; border-radius: 4px; font-weight: 600; }
+  .validation-error { color: #dc2626; font-size: 0.9em; margin-bottom: 12px; padding: 10px; background: #fef2f2; border-radius: 6px; }
+  .start-row { text-align: center; margin-top: 20px; }
+
+  /* Draft Board */
+  .on-the-clock { background: linear-gradient(135deg, #166534, #15803d); color: #fff; border-radius: 12px; padding: 24px 32px; text-align: center; margin-bottom: 20px; }
+  .on-the-clock .team-name { font-size: 2.8em; font-weight: 800; letter-spacing: -0.02em; text-shadow: 0 2px 4px rgba(0,0,0,0.2); }
+  .on-the-clock .pick-info { font-size: 1.1em; opacity: 0.9; margin-top: 4px; }
+  .phase-badge { display: inline-block; background: rgba(255,255,255,0.2); padding: 4px 14px; border-radius: 20px; font-size: 0.85em; font-weight: 600; margin-bottom: 8px; }
+  .draft-layout { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px; }
+  .available-panel h2 { margin-bottom: 10px; }
+  .player-table { width: 100%; border-collapse: collapse; }
+  .player-table th { text-align: left; padding: 8px 10px; background: #f1f5f9; font-size: 0.8em; color: #475569; text-transform: uppercase; letter-spacing: 0.05em; position: sticky; top: 0; }
+  .player-table td { padding: 8px 10px; border-bottom: 1px solid #f1f5f9; font-size: 0.9em; }
+  .player-table tr.clickable { cursor: pointer; transition: background 0.1s; }
+  .player-table tr.clickable:hover { background: #dbeafe; }
+  .player-table tr.zero-score td { color: #94a3b8; font-style: italic; }
+  .available-scroll { max-height: 450px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 8px; }
+  .rosters-panel { display: flex; flex-direction: column; gap: 12px; }
+  .roster-card { border: 2px solid #e2e8f0; border-radius: 8px; padding: 12px; }
+  .roster-card.active { border-color: #16a34a; background: #f0fdf4; }
+  .roster-card .team-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+  .roster-card .team-header h3 { font-size: 1em; }
+  .roster-card .year-counts { font-size: 0.8em; color: #64748b; }
+  .roster-card .year-counts span { background: #f1f5f9; padding: 2px 8px; border-radius: 4px; margin-left: 4px; }
+  .roster-card ul { list-style: none; font-size: 0.85em; }
+  .roster-card li { padding: 2px 0; display: flex; justify-content: space-between; }
+  .roster-card li .score { color: #64748b; }
+  .pre-assigned-badge { background: #dbeafe; color: #1e40af; font-size: 0.7em; padding: 1px 5px; border-radius: 3px; font-weight: 600; margin-left: 4px; }
+  .draft-actions { display: flex; gap: 10px; justify-content: center; margin-bottom: 16px; }
+  .draft-log { max-height: 160px; overflow-y: auto; font-size: 0.85em; }
+  .draft-log .log-entry { padding: 3px 0; border-bottom: 1px solid #f1f5f9; }
+  .draft-log .log-entry .round-label { color: #64748b; font-weight: 600; }
+
+  /* Phase transition overlay */
+  .phase-transition { background: #1e40af; color: #fff; text-align: center; padding: 20px; border-radius: 10px; margin-bottom: 20px; animation: fadeIn 0.3s; }
+  .phase-transition h2 { color: #fff; font-size: 1.5em; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
+
+  /* Summary */
+  .summary-header { text-align: center; margin-bottom: 24px; }
+  .summary-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 20px; margin-bottom: 24px; }
+  .summary-card { border-left: 4px solid #2563eb; }
+  .summary-card h3 { font-size: 1.15em; margin-bottom: 4px; }
+  .summary-card .coach-info { font-size: 0.85em; color: #64748b; margin-bottom: 10px; }
+  .summary-card .year-group { margin-bottom: 10px; }
+  .summary-card .year-group h4 { font-size: 0.85em; color: #475569; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px; border-bottom: 1px solid #e2e8f0; padding-bottom: 4px; }
+  .summary-card .year-group ul { list-style: none; }
+  .summary-card .year-group li { padding: 3px 0; font-size: 0.9em; display: flex; justify-content: space-between; }
+  .summary-card .team-total { margin-top: 10px; padding-top: 8px; border-top: 2px solid #e2e8f0; font-weight: 700; font-size: 0.95em; display: flex; justify-content: space-between; }
+  .summary-actions { text-align: center; }
+
+  .draft-order-note { font-size: 0.85em; color: #64748b; margin-bottom: 4px; }
+
+  @media print {
+    body { background: #fff; }
+    .draft-actions, .summary-actions, button, .draft-log, .on-the-clock { display: none !important; }
+    .summary-card { break-inside: avoid; border: 1px solid #ccc; box-shadow: none; }
+    #app { max-width: 100%; }
+  }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script>
+// === PLAYER DATA ===
+const PLAYERS = [
+  { id: 1,  name: "Rocco Steen",          dob: "8/3/2014",    year: 1, score: 18,   flag: "A", isCoachOnly: false },
+  { id: 2,  name: "Bowen Clarke",         dob: "6/24/2014",   year: 1, score: 15,   flag: "A", isCoachOnly: false },
+  { id: 3,  name: "Liam Back",            dob: "5/8/2014",    year: 1, score: 14.5, flag: null, isCoachOnly: false },
+  { id: 4,  name: "Marcus McHardy",       dob: "9/16/2014",   year: 1, score: 14,   flag: null, isCoachOnly: false },
+  { id: 5,  name: "Odin Nerreter",        dob: "5/7/2013",    year: 2, score: 14,   flag: null, isCoachOnly: false },
+  { id: 6,  name: "Max Schwabe",          dob: "6/24/2014",   year: 1, score: 14,   flag: "C", isCoachOnly: false },
+  { id: 7,  name: "Malachi Lawn",         dob: "2/21/2014",   year: 1, score: 13.5, flag: null, isCoachOnly: false },
+  { id: 8,  name: "Linden Morrison",      dob: "9/4/2014",    year: 1, score: 12,   flag: null, isCoachOnly: false },
+  { id: 9,  name: "Ryan Chatha",          dob: "3/14/2014",   year: 1, score: 11,   flag: "A", isCoachOnly: false },
+  { id: 10, name: "Merrick Turner",       dob: "5/28/2014",   year: 1, score: 11,   flag: "A", isCoachOnly: false },
+  { id: 11, name: "Louis De Paulo",       dob: "6/18/2014",   year: 1, score: 8,    flag: null, isCoachOnly: false },
+  { id: 12, name: "Jamie Munns",          dob: "1/17/2013",   year: 2, score: 8,    flag: null, isCoachOnly: false },
+  { id: 13, name: "Noah Classen",         dob: "5/18/2013",   year: 2, score: 6,    flag: null, isCoachOnly: false },
+  { id: 14, name: "Royce Genschorek",     dob: "8/1/2013",    year: 2, score: 6,    flag: null, isCoachOnly: false },
+  { id: 15, name: "Felix Schroeder",      dob: "9/17/2013",   year: 2, score: 6,    flag: null, isCoachOnly: false },
+  { id: 16, name: "Quinn Andersen",       dob: "7/10/2014",   year: 1, score: 0,    flag: null, isCoachOnly: false },
+  { id: 17, name: "Jimmy Cofman",         dob: "5/18/2013",   year: 2, score: 0,    flag: null, isCoachOnly: false },
+  { id: 18, name: "Henry Crocker",        dob: "10/23/2014",  year: 1, score: 0,    flag: null, isCoachOnly: false },
+  { id: 19, name: "Lyndon Dyck",          dob: "5/20/2014",   year: 1, score: 0,    flag: "A", isCoachOnly: false },
+  { id: 20, name: "Benjamin Hewson",      dob: "7/29/2014",   year: 1, score: 0,    flag: null, isCoachOnly: false },
+  { id: 21, name: "Ezra Hill",            dob: "8/21/2014",   year: 1, score: 0,    flag: null, isCoachOnly: false },
+  { id: 22, name: "June Lee",             dob: "8/19/2014",   year: 1, score: 0,    flag: null, isCoachOnly: false },
+  { id: 23, name: "Rooke Russell-Coutts", dob: "8/4/2013",    year: 2, score: 0,    flag: "A", isCoachOnly: false },
+  { id: 24, name: "Sam Sarkissen",        dob: null,          year: null, score: 0, flag: "C", isCoachOnly: true },
+  { id: 25, name: "Everett Urton",        dob: "8/9/2013",    year: 2, score: 0,    flag: null, isCoachOnly: false },
+  { id: 26, name: "Sam Whitney",          dob: "1/13/2014",   year: 1, score: 0,    flag: null, isCoachOnly: false },
+];
+
+// === STATE ===
+let state = {
+  screen: "setup",       // "setup" | "draft" | "summary"
+  numTeams: 4,
+  teams: [],             // [{ id, name, coachName, preAssigned: [playerId], drafted: [playerId], coachChildrenScore }]
+  draftOrder: [],         // team ids in pick order
+  phase: "year1",         // "year1" | "year2"
+  currentOrderIdx: 0,     // index into draftOrder
+  round: 1,
+  history: [],            // [{ teamId, playerId, round, phase }]
+  showTransition: false,
+  validationError: "",
+  coachAssignments: {},   // playerId -> teamId
+};
+
+function getPlayer(id) { return PLAYERS.find(p => p.id === id); }
+function getTeam(id) { return state.teams.find(t => t.id === id); }
+function getCoachFlagPlayers() { return PLAYERS.filter(p => p.flag); }
+
+function getAvailablePlayers() {
+  const yearFilter = state.phase === "year1" ? 1 : 2;
+  const taken = new Set();
+  state.teams.forEach(t => {
+    t.preAssigned.forEach(id => taken.add(id));
+    t.drafted.forEach(id => taken.add(id));
+  });
+  return PLAYERS.filter(p => p.year === yearFilter && !p.isCoachOnly && !taken.has(p.id))
+    .sort((a, b) => b.score - a.score || a.name.localeCompare(b.name));
+}
+
+function getAllTeamPlayers(team) {
+  const ids = [...team.preAssigned, ...team.drafted];
+  return ids.map(id => getPlayer(id)).filter(Boolean);
+}
+
+function calcCoachChildrenScore(team) {
+  return team.preAssigned.reduce((sum, id) => sum + (getPlayer(id)?.score || 0), 0);
+}
+
+// === SETUP LOGIC ===
+function initTeams(n) {
+  state.numTeams = n;
+  state.teams = [];
+  for (let i = 0; i < n; i++) {
+    state.teams.push({ id: i + 1, name: "Team " + (i + 1), coachName: "", preAssigned: [], drafted: [], coachChildrenScore: 0 });
+  }
+  state.coachAssignments = {};
+}
+
+function startDraft() {
+  // Validate assignments
+  const flagPlayers = getCoachFlagPlayers();
+  for (const p of flagPlayers) {
+    const assigned = state.coachAssignments[p.id];
+    if (!assigned) {
+      state.validationError = `Please assign ${p.name} (${p.flag}) to a team.`;
+      render(); return;
+    }
+  }
+  // Check team names not empty
+  for (const t of state.teams) {
+    if (!t.name.trim()) { state.validationError = "All teams must have a name."; render(); return; }
+  }
+  state.validationError = "";
+
+  // Apply assignments
+  state.teams.forEach(t => t.preAssigned = []);
+  for (const [pid, tid] of Object.entries(state.coachAssignments)) {
+    const team = getTeam(Number(tid));
+    if (team) team.preAssigned.push(Number(pid));
+  }
+
+  // Calculate scores and draft order
+  state.teams.forEach(t => { t.coachChildrenScore = calcCoachChildrenScore(t); });
+  state.draftOrder = [...state.teams]
+    .sort((a, b) => a.coachChildrenScore - b.coachChildrenScore || a.name.localeCompare(b.name))
+    .map(t => t.id);
+
+  state.screen = "draft";
+  state.phase = "year1";
+  state.currentOrderIdx = 0;
+  state.round = 1;
+  state.history = [];
+  state.teams.forEach(t => t.drafted = []);
+  state.showTransition = false;
+
+  // Check if year1 has any available players
+  if (getAvailablePlayers().length === 0) {
+    state.phase = "year2";
+    if (getAvailablePlayers().length === 0) {
+      state.screen = "summary";
+    }
+  }
+  render();
+}
+
+function draftPlayer(playerId) {
+  const teamId = state.draftOrder[state.currentOrderIdx];
+  const team = getTeam(teamId);
+  team.drafted.push(playerId);
+  state.history.push({ teamId, playerId, round: state.round, phase: state.phase });
+
+  // Advance turn
+  state.currentOrderIdx++;
+  if (state.currentOrderIdx >= state.draftOrder.length) {
+    state.currentOrderIdx = 0;
+    state.round++;
+  }
+
+  // Check phase transition
+  if (getAvailablePlayers().length === 0) {
+    if (state.phase === "year1") {
+      state.phase = "year2";
+      state.currentOrderIdx = 0;
+      state.round = 1;
+      state.showTransition = true;
+      if (getAvailablePlayers().length === 0) {
+        state.screen = "summary";
+      }
+    } else {
+      state.screen = "summary";
+    }
+  }
+  render();
+}
+
+function undoLastPick() {
+  if (state.history.length === 0) return;
+  const last = state.history.pop();
+  const team = getTeam(last.teamId);
+  team.drafted = team.drafted.filter(id => id !== last.playerId);
+
+  // If we're in summary or transitioned phase, go back
+  if (state.screen === "summary") state.screen = "draft";
+  if (state.showTransition && last.phase === "year1") {
+    state.phase = "year1";
+    state.showTransition = false;
+  }
+  state.phase = last.phase;
+  state.round = last.round;
+  state.currentOrderIdx = state.draftOrder.indexOf(last.teamId);
+  render();
+}
+
+function resetDraft() {
+  if (!confirm("Reset the entire draft and return to setup?")) return;
+  state.screen = "setup";
+  state.teams.forEach(t => { t.drafted = []; t.preAssigned = []; });
+  state.history = [];
+  state.phase = "year1";
+  state.round = 1;
+  state.currentOrderIdx = 0;
+  state.showTransition = false;
+  render();
+}
+
+// === RENDER ===
+function render() {
+  const app = document.getElementById("app");
+  if (state.screen === "setup") renderSetup(app);
+  else if (state.screen === "draft") renderDraft(app);
+  else renderSummary(app);
+}
+
+function renderSetup(app) {
+  const flagPlayers = getCoachFlagPlayers();
+  let html = `
+    <div class="setup-header">
+      <h1>Youth Baseball Draft</h1>
+      <p class="subtitle">Configure teams and assign coach/assistant children before starting the draft</p>
+    </div>
+    <div class="team-count-row">
+      <label><strong>Number of Teams:</strong></label>
+      <select id="numTeams" onchange="handleTeamCount(this.value)">
+        ${[2,3,4,5,6,7,8].map(n => `<option value="${n}" ${n === state.numTeams ? "selected" : ""}>${n}</option>`).join("")}
+      </select>
+    </div>
+    <div class="teams-grid">
+      ${state.teams.map(t => `
+        <div class="card team-card">
+          <label>Team Name</label>
+          <input type="text" value="${esc(t.name)}" onchange="handleTeamName(${t.id}, this.value)" />
+          <label>Coach Name</label>
+          <input type="text" value="${esc(t.coachName)}" placeholder="Optional" onchange="handleCoachName(${t.id}, this.value)" />
+        </div>
+      `).join("")}
+    </div>
+    <div class="card coach-assign-section">
+      <h2>Assign Coach & Assistant Children to Teams</h2>
+      <p class="subtitle">Each flagged player/coach must be assigned to exactly one team. Their scores determine draft order (lowest total picks first).</p>
+      <table class="coach-assign-table">
+        <thead><tr><th>Name</th><th>Type</th><th>Year</th><th>Score</th><th>Assign to Team</th></tr></thead>
+        <tbody>
+          ${flagPlayers.map(p => `
+            <tr>
+              <td>${esc(p.name)} ${p.isCoachOnly ? '<span class="coach-only-badge">Coach Only</span>' : ''}</td>
+              <td>${p.flag === "C" ? "Coach's Child" : "Asst. Child"}</td>
+              <td>${p.year ? "Year " + p.year + " (" + (p.year === 1 ? "2014" : "2013") + ")" : "N/A"}</td>
+              <td>${p.score}</td>
+              <td>
+                <select onchange="handleAssign(${p.id}, this.value)">
+                  <option value="">-- Select --</option>
+                  ${state.teams.map(t => `<option value="${t.id}" ${state.coachAssignments[p.id] == t.id ? "selected" : ""}>${esc(t.name)}</option>`).join("")}
+                </select>
+              </td>
+            </tr>
+          `).join("")}
+        </tbody>
+      </table>
+    </div>
+    ${state.validationError ? `<div class="validation-error">${esc(state.validationError)}</div>` : ""}
+    <div class="start-row">
+      <button class="btn-primary" onclick="startDraft()" style="font-size:1.1em;padding:14px 40px;">Start Draft</button>
+    </div>
+  `;
+  app.innerHTML = html;
+}
+
+function renderDraft(app) {
+  const currentTeamId = state.draftOrder[state.currentOrderIdx];
+  const currentTeam = getTeam(currentTeamId);
+  const available = getAvailablePlayers();
+  const phaseLabel = state.phase === "year1" ? "Year 1 (2014)" : "Year 2 (2013)";
+
+  let html = "";
+
+  if (state.showTransition) {
+    html += `<div class="phase-transition">
+      <h2>Year 1 Draft Complete!</h2>
+      <p>Moving to Year 2 (2013 birth year) draft</p>
+      <button class="btn-primary" style="margin-top:10px;" onclick="dismissTransition()">Continue to Year 2 Draft</button>
+    </div>`;
+  }
+
+  html += `
+    <div class="on-the-clock">
+      <div class="phase-badge">${phaseLabel} &mdash; Round ${state.round}</div>
+      <div class="team-name">${esc(currentTeam.name)}</div>
+      <div class="pick-info">Pick ${state.currentOrderIdx + 1} of ${state.draftOrder.length} this round</div>
+    </div>
+    <div class="draft-actions">
+      <button class="btn-secondary btn-sm" onclick="undoLastPick()" ${state.history.length === 0 ? "disabled" : ""}>Undo Last Pick</button>
+      <button class="btn-danger btn-sm" onclick="resetDraft()">Reset Draft</button>
+    </div>
+    <div class="draft-layout">
+      <div class="available-panel card">
+        <h2>Available Players &mdash; ${phaseLabel}</h2>
+        <div class="available-scroll">
+          <table class="player-table">
+            <thead><tr><th>#</th><th>Player</th><th>DOB</th><th>Score</th></tr></thead>
+            <tbody>
+              ${available.length === 0 ? '<tr><td colspan="4" style="text-align:center;color:#94a3b8;padding:20px;">No players available</td></tr>' :
+                available.map((p, i) => `
+                  <tr class="clickable ${p.score === 0 ? 'zero-score' : ''}" onclick="draftPlayer(${p.id})">
+                    <td>${i + 1}</td>
+                    <td>${esc(p.name)}</td>
+                    <td>${p.dob || "N/A"}</td>
+                    <td><strong>${p.score}</strong></td>
+                  </tr>
+                `).join("")}
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div class="rosters-panel">
+        ${state.draftOrder.map(tid => {
+          const t = getTeam(tid);
+          const players = getAllTeamPlayers(t);
+          const y1 = players.filter(p => p.year === 1 && !p.isCoachOnly).length;
+          const y2 = players.filter(p => p.year === 2 && !p.isCoachOnly).length;
+          const isActive = tid === currentTeamId;
+          return `<div class="roster-card ${isActive ? 'active' : ''}">
+            <div class="team-header">
+              <h3>${esc(t.name)} ${isActive ? '&#9668;' : ''}</h3>
+              <div class="year-counts"><span>2014: ${y1}</span><span>2013: ${y2}</span></div>
+            </div>
+            <div class="draft-order-note">Draft pos: #${state.draftOrder.indexOf(tid) + 1} (score: ${t.coachChildrenScore})</div>
+            <ul>
+              ${t.preAssigned.filter(id => !getPlayer(id).isCoachOnly).map(id => {
+                const p = getPlayer(id);
+                return `<li>${esc(p.name)} <span class="pre-assigned-badge">PRE</span> <span class="score">${p.score}</span></li>`;
+              }).join("")}
+              ${t.preAssigned.filter(id => getPlayer(id).isCoachOnly).map(id => {
+                const p = getPlayer(id);
+                return `<li style="color:#94a3b8;font-style:italic;">${esc(p.name)} <span class="coach-only-badge">Coach</span></li>`;
+              }).join("")}
+              ${t.drafted.map(id => {
+                const p = getPlayer(id);
+                return `<li>${esc(p.name)} <span class="score">${p.score}</span></li>`;
+              }).join("")}
+              ${players.length === 0 && t.preAssigned.filter(id => getPlayer(id).isCoachOnly).length === 0 ? '<li style="color:#cbd5e1;">No players yet</li>' : ''}
+            </ul>
+          </div>`;
+        }).join("")}
+      </div>
+    </div>
+    <div class="card" style="margin-top:4px;">
+      <h3>Draft Log</h3>
+      <div class="draft-log">
+        ${state.history.slice().reverse().map(h => {
+          const p = getPlayer(h.playerId);
+          const t = getTeam(h.teamId);
+          const phLbl = h.phase === "year1" ? "Y1" : "Y2";
+          return `<div class="log-entry"><span class="round-label">${phLbl} R${h.round}:</span> ${esc(t.name)} drafted <strong>${esc(p.name)}</strong> (${p.score})</div>`;
+        }).join("")}
+        ${state.history.length === 0 ? '<div style="color:#94a3b8;padding:8px 0;">No picks yet</div>' : ''}
+      </div>
+    </div>
+  `;
+  app.innerHTML = html;
+}
+
+function renderSummary(app) {
+  const teamColors = ["#2563eb","#dc2626","#16a34a","#9333ea","#ea580c","#0891b2","#be185d","#4f46e5"];
+  let html = `
+    <div class="summary-header">
+      <h1>Draft Complete!</h1>
+      <p class="subtitle">Final team rosters</p>
+    </div>
+    <div class="summary-grid">
+      ${state.draftOrder.map((tid, idx) => {
+        const t = getTeam(tid);
+        const allPlayers = getAllTeamPlayers(t);
+        const preSet = new Set(t.preAssigned);
+        const y1players = allPlayers.filter(p => p.year === 1 && !p.isCoachOnly);
+        const y2players = allPlayers.filter(p => p.year === 2 && !p.isCoachOnly);
+        const coachOnly = t.preAssigned.map(id => getPlayer(id)).filter(p => p.isCoachOnly);
+        const totalScore = allPlayers.filter(p => !p.isCoachOnly).reduce((s, p) => s + p.score, 0);
+        const totalPlayers = allPlayers.filter(p => !p.isCoachOnly).length;
+        return `<div class="card summary-card" style="border-left-color:${teamColors[idx % teamColors.length]}">
+          <h3>${esc(t.name)}</h3>
+          <div class="coach-info">${t.coachName ? 'Coach: ' + esc(t.coachName) + ' | ' : ''}Draft Position: #${idx + 1} (Coach Score: ${t.coachChildrenScore})</div>
+          ${y1players.length > 0 ? `<div class="year-group">
+            <h4>Year 1 &mdash; 2014 (${y1players.length})</h4>
+            <ul>${y1players.map(p => `<li><span>${esc(p.name)}${preSet.has(p.id) ? ' <span class="pre-assigned-badge">PRE</span>' : ''}</span><span class="score">${p.score}</span></li>`).join("")}</ul>
+          </div>` : ''}
+          ${y2players.length > 0 ? `<div class="year-group">
+            <h4>Year 2 &mdash; 2013 (${y2players.length})</h4>
+            <ul>${y2players.map(p => `<li><span>${esc(p.name)}${preSet.has(p.id) ? ' <span class="pre-assigned-badge">PRE</span>' : ''}</span><span class="score">${p.score}</span></li>`).join("")}</ul>
+          </div>` : ''}
+          ${coachOnly.length > 0 ? `<div class="year-group"><h4>Coaches</h4><ul>${coachOnly.map(p => `<li style="color:#94a3b8;font-style:italic;">${esc(p.name)} <span class="coach-only-badge">Coach</span></li>`).join("")}</ul></div>` : ''}
+          <div class="team-total"><span>Total Players: ${totalPlayers}</span><span>Total Score: ${totalScore}</span></div>
+        </div>`;
+      }).join("")}
+    </div>
+    <div class="summary-actions">
+      <button class="btn-primary" onclick="window.print()">Print Summary</button>
+      <button class="btn-secondary" style="margin-left:10px;" onclick="resetDraft()">New Draft</button>
+    </div>
+  `;
+  app.innerHTML = html;
+}
+
+// === HELPERS ===
+function esc(s) {
+  if (!s) return "";
+  const d = document.createElement("div");
+  d.textContent = s;
+  return d.innerHTML;
+}
+
+// === EVENT HANDLERS ===
+function handleTeamCount(val) {
+  const n = parseInt(val);
+  const oldAssignments = { ...state.coachAssignments };
+  initTeams(n);
+  // Restore assignments that are still valid
+  for (const [pid, tid] of Object.entries(oldAssignments)) {
+    if (Number(tid) <= n) state.coachAssignments[pid] = tid;
+  }
+  render();
+}
+
+function handleTeamName(id, val) {
+  getTeam(id).name = val;
+  // Re-render the assignment dropdowns to reflect new names
+  render();
+}
+
+function handleCoachName(id, val) {
+  getTeam(id).coachName = val;
+}
+
+function handleAssign(playerId, teamId) {
+  if (teamId) state.coachAssignments[playerId] = Number(teamId);
+  else delete state.coachAssignments[playerId];
+}
+
+function dismissTransition() {
+  state.showTransition = false;
+  render();
+}
+
+// === INIT ===
+initTeams(state.numTeams);
+render();
+</script>
+</body>
+</html>
