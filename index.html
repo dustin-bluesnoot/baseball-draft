@@ -451,16 +451,24 @@ function importCSV(csvText) {
 
 function importTabFormat(lines) {
   // Parse tab-separated evaluation data
-  // Expected columns: FIRST, LAST, P/Pitch, HIT, Glove/Fielding, Total, Coach, Assistant
+  // Supports: FIRST, LAST, DOB, Year, Pitching, Hitting, Fielding, 2B TIME, TOTAL, Coach or Asst.
   const headerCols = lines[0].split("\t").map(c => c.trim().toLowerCase());
 
   // Map column indices flexibly
   const firstIdx = headerCols.findIndex(c => c === "first" || c === "first name");
   const lastIdx = headerCols.findIndex(c => c === "last" || c === "last name");
   const nameIdx = headerCols.findIndex(c => c === "name");
+  const dobIdx = headerCols.findIndex(c => c === "dob" || c === "birthdate" || c === "birth date");
+  const yearIdx = headerCols.findIndex(c => c === "year");
+  const pitchIdx = headerCols.findIndex(c => c === "pitching" || c === "pitch" || c === "p");
+  const hitIdx = headerCols.findIndex(c => c === "hitting" || c === "hit");
+  const fieldIdx = headerCols.findIndex(c => c === "fielding" || c === "glove" || c === "field");
+  const timeIdx = headerCols.findIndex(c => c === "2b time" || c === "time" || c === "2b");
   const totalIdx = headerCols.findIndex(c => c === "total" || c === "total score" || c === "score");
-  const coachIdx = headerCols.findIndex(c => c === "coach");
-  const asstIdx = headerCols.findIndex(c => c === "assistant" || c === "asst" || c === "assistant coach");
+  // Single "Coach or Asst." column with C/A values, OR separate Coach/Assistant columns with X
+  const coachOrAsstIdx = headerCols.findIndex(c => c.includes("coach") && c.includes("asst"));
+  const coachIdx = coachOrAsstIdx < 0 ? headerCols.findIndex(c => c === "coach") : -1;
+  const asstIdx = coachOrAsstIdx < 0 ? headerCols.findIndex(c => c === "assistant" || c === "asst" || c === "assistant coach") : -1;
 
   // Need either first+last or name
   const hasName = firstIdx >= 0 && lastIdx >= 0;
@@ -477,26 +485,49 @@ function importTabFormat(lines) {
     if (hasName) {
       const first = vals[firstIdx] || "";
       const last = vals[lastIdx] || "";
-      playerName = (first + " " + last).trim();
+      playerName = (first + " " + last).replace(/\s+/g, " ").trim();
     } else {
       playerName = (vals[nameIdx] || "").trim();
     }
     if (!playerName) continue;
 
     const scoreVal = totalIdx >= 0 ? parseFloat(vals[totalIdx]) || 0 : 0;
-    const isCoach = coachIdx >= 0 && (vals[coachIdx] || "").toUpperCase() === "X";
-    const isAsst = asstIdx >= 0 && (vals[asstIdx] || "").toUpperCase() === "X";
-    const flag = isCoach ? "C" : isAsst ? "A" : null;
+    const dobVal = dobIdx >= 0 ? (vals[dobIdx] || "") : "";
+    const yearVal = yearIdx >= 0 ? (vals[yearIdx] || "") : "";
+
+    // Determine flag from either combined or separate columns
+    let flag = null;
+    if (coachOrAsstIdx >= 0) {
+      const v = (vals[coachOrAsstIdx] || "").toUpperCase();
+      if (v === "C") flag = "C";
+      else if (v === "A") flag = "A";
+    } else {
+      const isCoach = coachIdx >= 0 && (vals[coachIdx] || "").toUpperCase() === "X";
+      const isAsst = asstIdx >= 0 && (vals[asstIdx] || "").toUpperCase() === "X";
+      flag = isCoach ? "C" : isAsst ? "A" : null;
+    }
+
+    // Determine if coach-only (has flag C but no score and no stats)
+    const pitchVal = pitchIdx >= 0 ? parseFloat(vals[pitchIdx]) || 0 : 0;
+    const hitVal = hitIdx >= 0 ? parseFloat(vals[hitIdx]) || 0 : 0;
+    const fieldVal = fieldIdx >= 0 ? parseFloat(vals[fieldIdx]) || 0 : 0;
+    const timeVal = timeIdx >= 0 ? parseFloat(vals[timeIdx]) || 0 : 0;
+    const hasNoStats = scoreVal === 0 && pitchVal === 0 && hitVal === 0 && fieldVal === 0;
+    const isCoachOnly = flag === "C" && hasNoStats && !dobVal;
 
     newPlayers.push({
       id: nextPlayerId++,
       name: playerName,
-      dob: "",
-      year: null,
+      dob: dobVal,
+      year: yearVal === "" ? null : Number(yearVal),
       score: scoreVal,
       flag: flag,
-      isCoachOnly: false,
+      isCoachOnly: isCoachOnly,
       coachName: "",
+      pitching: pitchVal,
+      hitting: hitVal,
+      fielding: fieldVal,
+      time2b: timeVal,
     });
   }
 
@@ -1309,7 +1340,7 @@ function renderSetup(app) {
         <p class="subtitle">Paste player data below (CSV or tab-separated from a spreadsheet). This will <strong>replace</strong> all current players.</p>
         <p class="subtitle" style="font-size:0.8em;color:#64748b;margin-top:4px;">
           <strong>CSV:</strong> Name, DOB, Year, Score, Flag, CoachOnly &nbsp;|&nbsp;
-          <strong>Tab/Spreadsheet:</strong> First, Last, P, Hit, Glove, Total, Coach (X), Assistant (X)
+          <strong>Tab/Spreadsheet:</strong> First, Last, DOB, Year, Pitching, Hitting, Fielding, 2B Time, Total, Coach or Asst. (C/A)
         </p>
         <textarea id="importText" placeholder="Paste CSV or tab-separated data from a spreadsheet here..."></textarea>
         <div style="display:flex;gap:8px;margin-top:8px;">
@@ -1376,14 +1407,18 @@ function renderDraft(app) {
         <h2>Available Players &mdash; ${phaseLabel}</h2>
         <div class="available-scroll">
           <table class="player-table">
-            <thead><tr><th>#</th><th>Player</th><th>DOB</th><th>Score</th></tr></thead>
+            <thead><tr><th>#</th><th>Player</th><th>DOB</th><th>P</th><th>Hit</th><th>Fld</th><th>2B</th><th>Total</th></tr></thead>
             <tbody>
-              ${available.length === 0 ? '<tr><td colspan="4" style="text-align:center;color:#94a3b8;padding:20px;">No players available</td></tr>' :
+              ${available.length === 0 ? '<tr><td colspan="8" style="text-align:center;color:#94a3b8;padding:20px;">No players available</td></tr>' :
                 available.map((p, i) => `
                   <tr class="clickable ${p.score === 0 ? 'zero-score' : ''} ${p.flag === 'A' ? 'asst-highlight' : ''}" onclick="draftPlayer(${p.id})">
                     <td>${i + 1}</td>
                     <td>${esc(p.name)} ${p.flag === 'A' ? '<span class="asst-badge">Parent will assist</span>' : ''}</td>
                     <td>${p.dob || "N/A"}</td>
+                    <td>${p.pitching || "-"}</td>
+                    <td>${p.hitting || "-"}</td>
+                    <td>${p.fielding || "-"}</td>
+                    <td>${p.time2b || "-"}</td>
                     <td><strong>${p.score}</strong></td>
                   </tr>
                 `).join("")}
@@ -1410,7 +1445,8 @@ function renderDraft(app) {
                 const p = getPlayer(id);
                 const badge = p.flag === "C" ? '<span class="head-coach-badge">HC</span>' : '<span class="asst-badge">AC</span>';
                 const coach = p.coachName ? `<span style="font-size:0.8em;color:#64748b;"> (${esc(p.coachName)})</span>` : '';
-                return `<li>${esc(p.name)}${coach} ${badge} <span class="score">${p.score}</span></li>`;
+                const stats = (p.pitching || p.hitting || p.fielding) ? `<span style="font-size:0.75em;color:#64748b;"> P${p.pitching||0} H${p.hitting||0} F${p.fielding||0}</span>` : '';
+                return `<li>${esc(p.name)}${coach} ${badge}${stats} <span class="score">${p.score}</span></li>`;
               }).join("")}
               ${t.preAssigned.filter(id => getPlayer(id).isCoachOnly).map(id => {
                 const p = getPlayer(id);
@@ -1418,7 +1454,8 @@ function renderDraft(app) {
               }).join("")}
               ${t.drafted.map(id => {
                 const p = getPlayer(id);
-                return `<li>${esc(p.name)} ${p.flag === 'A' ? '<span class="asst-badge">AC</span>' : ''} <span class="score">${p.score}</span></li>`;
+                const stats = (p.pitching || p.hitting || p.fielding) ? `<span style="font-size:0.75em;color:#64748b;"> P${p.pitching||0} H${p.hitting||0} F${p.fielding||0}</span>` : '';
+                return `<li>${esc(p.name)} ${p.flag === 'A' ? '<span class="asst-badge">AC</span>' : ''}${stats} <span class="score">${p.score}</span></li>`;
               }).join("")}
               ${players.length === 0 && t.preAssigned.filter(id => getPlayer(id).isCoachOnly).length === 0 ? '<li style="color:#cbd5e1;">No players yet</li>' : ''}
             </ul>
