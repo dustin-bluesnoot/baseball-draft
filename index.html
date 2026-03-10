@@ -808,8 +808,36 @@ function draftPlayer(playerId) {
   }
 
   // Next pick goes to team with lowest total score
-  state.currentPickTeamId = getNextPickTeamId();
+  const nextTeam = getNextPickTeamId();
+  const player = getPlayer(playerId);
+
+  // If a 0-score player was picked and the same team would pick again, ask if they want to rotate
+  if (player && player.score === 0 && nextTeam === teamId && getAvailablePlayers().length > 0) {
+    const otherTeams = getSortedTeamsForPick(teamId);
+    if (otherTeams.length > 0) {
+      const nextTeamName = getTeam(otherTeams[0])?.name || "next team";
+      if (confirm(`${team.name} picked a 0-score player and still has the lowest score.\n\nMove to ${nextTeamName} instead?`)) {
+        state.currentPickTeamId = otherTeams[0];
+        render();
+        return;
+      }
+    }
+  }
+
+  state.currentPickTeamId = nextTeam;
   render();
+}
+
+// Get next teams in draft order excluding the team that just picked (for 0-score rotation prompt)
+function getSortedTeamsForPick(excludeTeamId) {
+  return [...state.draftOrder]
+    .filter(id => id !== excludeTeamId)
+    .sort((a, b) => {
+      const scoreA = calcTotalTeamScore(getTeam(a));
+      const scoreB = calcTotalTeamScore(getTeam(b));
+      if (scoreA !== scoreB) return scoreA - scoreB;
+      return state.draftOrder.indexOf(a) - state.draftOrder.indexOf(b);
+    });
 }
 
 function undoLastPick() {
