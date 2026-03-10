@@ -170,11 +170,11 @@ let state = {
   setupTab: "teams",     // "teams" | "players" | "import"
   numTeams: 4,
   teams: [],             // [{ id, name, coachName, preAssigned: [playerId], drafted: [playerId], coachChildrenScore }]
-  draftOrder: [],         // team ids in pick order
+  draftOrder: [],         // team ids (used for tiebreaking)
   phase: "year1",         // "year1" | "year2"
-  currentOrderIdx: 0,     // index into draftOrder
-  round: 1,
-  history: [],            // [{ teamId, playerId, round, phase }]
+  currentPickTeamId: null,
+  pickNumber: 0,
+  history: [],            // [{ teamId, playerId, pickNumber, phase }]
   showTransition: false,
   validationError: "",
   coachAssignments: {},   // playerId -> teamId
@@ -202,6 +202,20 @@ function getAllTeamPlayers(team) {
 
 function calcCoachChildrenScore(team) {
   return team.preAssigned.reduce((sum, id) => sum + (getPlayer(id)?.score || 0), 0);
+}
+
+function calcTotalTeamScore(team) {
+  return getAllTeamPlayers(team).filter(p => !p.isCoachOnly).reduce((sum, p) => sum + p.score, 0);
+}
+
+function getNextPickTeamId() {
+  // Team with lowest total score picks next; ties broken by original draft order position
+  return [...state.draftOrder].sort((a, b) => {
+    const scoreA = calcTotalTeamScore(getTeam(a));
+    const scoreB = calcTotalTeamScore(getTeam(b));
+    if (scoreA !== scoreB) return scoreA - scoreB;
+    return state.draftOrder.indexOf(a) - state.draftOrder.indexOf(b);
+  })[0];
 }
 
 // === PLAYER MANAGEMENT ===
@@ -356,11 +370,11 @@ function startDraft() {
 
   state.screen = "draft";
   state.phase = "year1";
-  state.currentOrderIdx = 0;
-  state.round = 1;
+  state.pickNumber = 0;
   state.history = [];
   state.teams.forEach(t => t.drafted = []);
   state.showTransition = false;
+  state.currentPickTeamId = getNextPickTeamId();
 
   // Check if year1 has any available players
   if (getAvailablePlayers().length === 0) {
@@ -373,32 +387,32 @@ function startDraft() {
 }
 
 function draftPlayer(playerId) {
-  const teamId = state.draftOrder[state.currentOrderIdx];
+  const teamId = state.currentPickTeamId;
   const team = getTeam(teamId);
   team.drafted.push(playerId);
-  state.history.push({ teamId, playerId, round: state.round, phase: state.phase });
-
-  // Advance turn
-  state.currentOrderIdx++;
-  if (state.currentOrderIdx >= state.draftOrder.length) {
-    state.currentOrderIdx = 0;
-    state.round++;
-  }
+  state.pickNumber++;
+  state.history.push({ teamId, playerId, pickNumber: state.pickNumber, phase: state.phase });
 
   // Check phase transition
   if (getAvailablePlayers().length === 0) {
     if (state.phase === "year1") {
       state.phase = "year2";
-      state.currentOrderIdx = 0;
-      state.round = 1;
+      state.pickNumber = 0;
       state.showTransition = true;
       if (getAvailablePlayers().length === 0) {
         state.screen = "summary";
+        render();
+        return;
       }
     } else {
       state.screen = "summary";
+      render();
+      return;
     }
   }
+
+  // Next pick goes to team with lowest total score
+  state.currentPickTeamId = getNextPickTeamId();
   render();
 }
 
@@ -415,8 +429,8 @@ function undoLastPick() {
     state.showTransition = false;
   }
   state.phase = last.phase;
-  state.round = last.round;
-  state.currentOrderIdx = state.draftOrder.indexOf(last.teamId);
+  state.pickNumber = last.pickNumber - 1;
+  state.currentPickTeamId = last.teamId;
   render();
 }
 
@@ -426,8 +440,7 @@ function resetDraft() {
   state.teams.forEach(t => { t.drafted = []; t.preAssigned = []; });
   state.history = [];
   state.phase = "year1";
-  state.round = 1;
-  state.currentOrderIdx = 0;
+  state.pickNumber = 0;
   state.showTransition = false;
   render();
 }
@@ -582,10 +595,11 @@ function renderSetup(app) {
 }
 
 function renderDraft(app) {
-  const currentTeamId = state.draftOrder[state.currentOrderIdx];
+  const currentTeamId = state.currentPickTeamId;
   const currentTeam = getTeam(currentTeamId);
   const available = getAvailablePlayers();
   const phaseLabel = state.phase === "year1" ? "Year 1 (2014)" : "Year 2 (2013)";
+  const currentTeamScore = calcTotalTeamScore(currentTeam);
 
   let html = "";
 
@@ -599,9 +613,9 @@ function renderDraft(app) {
 
   html += `
     <div class="on-the-clock">
-      <div class="phase-badge">${phaseLabel} &mdash; Round ${state.round}</div>
+      <div class="phase-badge">${phaseLabel} &mdash; Pick #${state.pickNumber + 1}</div>
       <div class="team-name">${esc(currentTeam.name)}</div>
-      <div class="pick-info">Pick ${state.currentOrderIdx + 1} of ${state.draftOrder.length} this round</div>
+      <div class="pick-info">Team Score: ${currentTeamScore} (lowest score picks next)</div>
     </div>
     <div class="draft-actions">
       <button class="btn-secondary btn-sm" onclick="undoLastPick()" ${state.history.length === 0 ? "disabled" : ""}>Undo Last Pick</button>
@@ -628,18 +642,19 @@ function renderDraft(app) {
         </div>
       </div>
       <div class="rosters-panel">
-        ${state.draftOrder.map(tid => {
+        ${[...state.draftOrder].sort((a, b) => calcTotalTeamScore(getTeam(a)) - calcTotalTeamScore(getTeam(b))).map(tid => {
           const t = getTeam(tid);
           const players = getAllTeamPlayers(t);
           const y1 = players.filter(p => p.year === 1 && !p.isCoachOnly).length;
           const y2 = players.filter(p => p.year === 2 && !p.isCoachOnly).length;
+          const teamScore = calcTotalTeamScore(t);
           const isActive = tid === currentTeamId;
           return `<div class="roster-card ${isActive ? 'active' : ''}">
             <div class="team-header">
               <h3>${esc(t.name)} ${isActive ? '&#9668;' : ''}</h3>
               <div class="year-counts"><span>2014: ${y1}</span><span>2013: ${y2}</span></div>
             </div>
-            <div class="draft-order-note">Draft pos: #${state.draftOrder.indexOf(tid) + 1} (score: ${t.coachChildrenScore})</div>
+            <div class="draft-order-note">Total score: ${teamScore}</div>
             <ul>
               ${t.preAssigned.filter(id => !getPlayer(id).isCoachOnly).map(id => {
                 const p = getPlayer(id);
@@ -667,7 +682,7 @@ function renderDraft(app) {
           const p = getPlayer(h.playerId);
           const t = getTeam(h.teamId);
           const phLbl = h.phase === "year1" ? "Y1" : "Y2";
-          return `<div class="log-entry"><span class="round-label">${phLbl} R${h.round}:</span> ${esc(t.name)} drafted <strong>${esc(p.name)}</strong> (${p.score})</div>`;
+          return `<div class="log-entry"><span class="round-label">${phLbl} #${h.pickNumber}:</span> ${esc(t.name)} drafted <strong>${esc(p.name)}</strong> (${p.score})</div>`;
         }).join("")}
         ${state.history.length === 0 ? '<div style="color:#94a3b8;padding:8px 0;">No picks yet</div>' : ''}
       </div>
@@ -760,6 +775,7 @@ function handleAssign(playerId, teamId) {
 
 function dismissTransition() {
   state.showTransition = false;
+  state.currentPickTeamId = getNextPickTeamId();
   render();
 }
 
