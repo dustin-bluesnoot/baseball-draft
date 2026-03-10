@@ -121,6 +121,35 @@
 
   .draft-order-note { font-size: 0.85em; color: #64748b; margin-bottom: 4px; }
 
+  /* Home Screen */
+  .home-screen { text-align: center; max-width: 700px; margin: 60px auto; }
+  .home-screen h1 { font-size: 2.2em; margin-bottom: 8px; }
+  .home-options { display: flex; flex-direction: column; gap: 16px; margin-top: 30px; }
+  .home-card { background: #fff; border-radius: 12px; padding: 24px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); cursor: pointer; transition: transform 0.15s, box-shadow 0.15s; border: 2px solid transparent; text-align: left; }
+  .home-card:hover { transform: translateY(-2px); box-shadow: 0 4px 16px rgba(0,0,0,0.12); border-color: #2563eb; }
+  .home-card h2 { margin-bottom: 4px; font-size: 1.2em; }
+  .home-card p { color: #64748b; font-size: 0.9em; margin: 0; }
+  .home-card .resume-info { font-size: 0.82em; color: #16a34a; font-weight: 600; margin-top: 6px; }
+  .home-card.disabled { opacity: 0.4; cursor: not-allowed; }
+  .home-card.disabled:hover { transform: none; box-shadow: 0 2px 8px rgba(0,0,0,0.08); border-color: transparent; }
+
+  /* Archive */
+  .archive-screen { max-width: 900px; margin: 0 auto; }
+  .archive-screen h1 { text-align: center; margin-bottom: 4px; }
+  .archive-list { margin-top: 20px; }
+  .archive-entry { background: #fff; border-radius: 10px; padding: 16px; margin-bottom: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); cursor: pointer; transition: transform 0.1s; border-left: 4px solid #2563eb; }
+  .archive-entry:hover { transform: translateY(-1px); box-shadow: 0 3px 10px rgba(0,0,0,0.1); }
+  .archive-entry h3 { margin-bottom: 2px; }
+  .archive-entry .archive-meta { font-size: 0.85em; color: #64748b; }
+  .archive-entry .archive-teams { font-size: 0.82em; color: #475569; margin-top: 4px; }
+  .archive-actions-row { display: flex; gap: 8px; margin-top: 8px; }
+  .archive-empty { text-align: center; color: #94a3b8; padding: 40px; }
+
+  /* Draft metadata row */
+  .draft-meta-row { display: flex; gap: 12px; margin-bottom: 16px; justify-content: center; flex-wrap: wrap; }
+  .draft-meta-row label { font-size: 0.85em; color: #64748b; font-weight: 600; }
+  .draft-meta-row input, .draft-meta-row select { padding: 6px 10px; font-size: 0.9em; }
+
   /* Trade Panel */
   .trade-overlay { background: rgba(0,0,0,0.5); position: fixed; inset: 0; z-index: 100; display: flex; align-items: center; justify-content: center; }
   .trade-panel { background: #fff; border-radius: 12px; padding: 24px; max-width: 800px; width: 95%; max-height: 90vh; overflow-y: auto; box-shadow: 0 20px 60px rgba(0,0,0,0.3); }
@@ -195,24 +224,30 @@ let PLAYERS = [
 let nextPlayerId = PLAYERS.length > 0 ? Math.max(...PLAYERS.map(p => p.id)) + 1 : 1;
 
 // === STATE ===
+const DEFAULT_PLAYERS = JSON.parse(JSON.stringify(PLAYERS));
+let draftArchive = []; // [{ id, season, division, date, players, state (snapshot) }]
+
 let state = {
-  screen: "setup",       // "setup" | "draft" | "summary"
+  screen: "home",        // "home" | "setup" | "draft" | "summary" | "archive" | "archive-view"
   setupTab: "teams",     // "teams" | "players" | "import"
   numTeams: 4,
-  teams: [],             // [{ id, name, coachName, preAssigned: [playerId], drafted: [playerId], coachChildrenScore }]
-  draftOrder: [],         // team ids (used for tiebreaking)
-  phase: "year1",         // "year1" | "year2"
+  season: new Date().getFullYear().toString(),
+  division: "",
+  teams: [],
+  draftOrder: [],
+  phase: "year1",
   currentPickTeamId: null,
   pickNumber: 0,
-  history: [],            // [{ teamId, playerId, pickNumber, phase }]
+  history: [],
   showTransition: false,
   validationError: "",
-  coachAssignments: {},   // playerId -> teamId
+  coachAssignments: {},
   tradeOpen: false,
-  tradeTeamAId: null,     // team on the clock
-  tradeTeamBId: null,     // other team
-  tradeSelectedA: [],     // player ids from team A to give
-  tradeSelectedB: [],     // player ids from team B to give
+  tradeTeamAId: null,
+  tradeTeamBId: null,
+  tradeSelectedA: [],
+  tradeSelectedB: [],
+  archiveViewId: null,   // id of archive entry being viewed
 };
 
 function getPlayer(id) { return PLAYERS.find(p => p.id === id); }
@@ -517,6 +552,104 @@ function downloadFile(filename, content, mimeType) {
   URL.revokeObjectURL(url);
 }
 
+// === PERSISTENCE ===
+const STORAGE_KEY = "baseball_draft_current";
+const ARCHIVE_KEY = "baseball_draft_archive";
+
+function saveDraftState() {
+  try {
+    const snapshot = { state: JSON.parse(JSON.stringify(state)), players: JSON.parse(JSON.stringify(PLAYERS)), nextPlayerId };
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(snapshot));
+  } catch (e) { console.warn("Failed to save draft state:", e); }
+}
+
+function loadDraftState() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return false;
+    const snapshot = JSON.parse(raw);
+    if (!snapshot.state || !snapshot.players) return false;
+    // Only restore if there's an active draft (setup, draft, or summary with history)
+    if (snapshot.state.screen === "home") return false;
+    Object.assign(state, snapshot.state);
+    PLAYERS = snapshot.players;
+    nextPlayerId = snapshot.nextPlayerId || (PLAYERS.length > 0 ? Math.max(...PLAYERS.map(p => p.id)) + 1 : 1);
+    return true;
+  } catch (e) { console.warn("Failed to load draft state:", e); return false; }
+}
+
+function clearDraftState() {
+  localStorage.removeItem(STORAGE_KEY);
+}
+
+function hasSavedDraft() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return null;
+    const snapshot = JSON.parse(raw);
+    if (!snapshot.state || snapshot.state.screen === "home") return null;
+    return snapshot;
+  } catch (e) { return null; }
+}
+
+function loadArchive() {
+  try {
+    const raw = localStorage.getItem(ARCHIVE_KEY);
+    draftArchive = raw ? JSON.parse(raw) : [];
+  } catch (e) { draftArchive = []; }
+}
+
+function saveArchive() {
+  try {
+    localStorage.setItem(ARCHIVE_KEY, JSON.stringify(draftArchive));
+  } catch (e) { console.warn("Failed to save archive:", e); }
+}
+
+function archiveCurrentDraft() {
+  const entry = {
+    id: Date.now(),
+    season: state.season || "Unknown",
+    division: state.division || "General",
+    date: new Date().toISOString(),
+    numTeams: state.teams.length,
+    teamNames: state.teams.map(t => t.name),
+    players: JSON.parse(JSON.stringify(PLAYERS)),
+    snapshot: JSON.parse(JSON.stringify(state))
+  };
+  draftArchive.unshift(entry);
+  saveArchive();
+  clearDraftState();
+}
+
+function deleteArchiveEntry(id) {
+  if (!confirm("Delete this archived draft?")) return;
+  draftArchive = draftArchive.filter(e => e.id !== id);
+  saveArchive();
+  render();
+}
+
+function viewArchiveEntry(id) {
+  state.archiveViewId = id;
+  state.screen = "archive-view";
+  render();
+}
+
+function goHome() {
+  state.screen = "home";
+  render();
+}
+
+function archiveAndGoHome() {
+  archiveCurrentDraft();
+  state.screen = "home";
+  state.teams = [];
+  state.history = [];
+  state.draftOrder = [];
+  PLAYERS = JSON.parse(JSON.stringify(DEFAULT_PLAYERS));
+  nextPlayerId = PLAYERS.length > 0 ? Math.max(...PLAYERS.map(p => p.id)) + 1 : 1;
+  render();
+}
+
 // === SETUP LOGIC ===
 function initTeams(n) {
   state.numTeams = n;
@@ -656,8 +789,9 @@ function undoLastPick() {
 }
 
 function resetDraft() {
-  if (!confirm("Reset the entire draft and return to setup?")) return;
-  state.screen = "setup";
+  if (!confirm("Reset the entire draft and return to home?")) return;
+  clearDraftState();
+  state.screen = "home";
   state.teams.forEach(t => { t.drafted = []; t.preAssigned = []; });
   state.history = [];
   state.phase = "year1";
@@ -774,9 +908,84 @@ function confirmTrade() {
 // === RENDER ===
 function render() {
   const app = document.getElementById("app");
-  if (state.screen === "setup") renderSetup(app);
+  if (state.screen === "home") renderHome(app);
+  else if (state.screen === "setup") renderSetup(app);
   else if (state.screen === "draft") renderDraft(app);
-  else renderSummary(app);
+  else if (state.screen === "summary") renderSummary(app);
+  else if (state.screen === "archive") renderArchive(app);
+  else if (state.screen === "archive-view") renderArchiveView(app);
+  else renderHome(app);
+
+  // Auto-save in-progress drafts
+  if (state.screen === "setup" || state.screen === "draft" || state.screen === "summary") {
+    saveDraftState();
+  }
+}
+
+function renderHome(app) {
+  const saved = hasSavedDraft();
+  let resumeInfo = "";
+  if (saved) {
+    const s = saved.state;
+    const phase = s.screen === "setup" ? "Setting up" : s.screen === "draft" ? "Drafting" : "Complete";
+    const teamNames = s.teams.map(t => t.name).join(", ");
+    const seasonDiv = [s.season, s.division].filter(Boolean).join(" / ");
+    resumeInfo = `<div class="resume-info">${phase} &mdash; ${s.teams.length} teams (${teamNames})${seasonDiv ? " &mdash; " + esc(seasonDiv) : ""}</div>`;
+  }
+
+  app.innerHTML = `
+    <div class="home-screen">
+      <h1>Youth Baseball Draft</h1>
+      <p class="subtitle">Manage your league's player draft with fair ordering, trades, and full history tracking</p>
+      <div class="home-options">
+        <div class="home-card ${saved ? '' : 'disabled'}" onclick="${saved ? 'resumeDraft()' : ''}">
+          <h2>Continue Draft</h2>
+          <p>Resume your draft in progress</p>
+          ${saved ? resumeInfo : '<p style="color:#94a3b8;font-size:0.82em;margin-top:4px;">No draft in progress</p>'}
+        </div>
+        <div class="home-card" onclick="startNewDraft()">
+          <h2>New Draft</h2>
+          <p>Set up a new draft with teams and players</p>
+        </div>
+        <div class="home-card" onclick="state.screen='archive';render();">
+          <h2>Draft Archive</h2>
+          <p>View past drafts by season and division</p>
+          <p style="color:#64748b;font-size:0.82em;margin-top:4px;">${draftArchive.length} archived draft${draftArchive.length !== 1 ? 's' : ''}</p>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function startNewDraft() {
+  const saved = hasSavedDraft();
+  if (saved && !confirm("You have a draft in progress. Starting a new one will discard it. Continue?")) return;
+  clearDraftState();
+  PLAYERS = JSON.parse(JSON.stringify(DEFAULT_PLAYERS));
+  nextPlayerId = PLAYERS.length > 0 ? Math.max(...PLAYERS.map(p => p.id)) + 1 : 1;
+  state.screen = "setup";
+  state.setupTab = "teams";
+  state.numTeams = 4;
+  state.season = new Date().getFullYear().toString();
+  state.division = "";
+  state.teams = [];
+  state.draftOrder = [];
+  state.phase = "year1";
+  state.currentPickTeamId = null;
+  state.pickNumber = 0;
+  state.history = [];
+  state.showTransition = false;
+  state.validationError = "";
+  state.coachAssignments = {};
+  state.tradeOpen = false;
+  initTeams(state.numTeams);
+  render();
+}
+
+function resumeDraft() {
+  if (loadDraftState()) {
+    render();
+  }
 }
 
 function renderSetup(app) {
@@ -787,11 +996,21 @@ function renderSetup(app) {
 
   if (tab === "teams") {
     tabContent = `
-      <div class="team-count-row">
-        <label><strong>Number of Teams:</strong></label>
-        <select id="numTeams" onchange="handleTeamCount(this.value)">
-          ${[2,3,4,5,6,7,8].map(n => `<option value="${n}" ${n === state.numTeams ? "selected" : ""}>${n}</option>`).join("")}
-        </select>
+      <div class="draft-meta-row">
+        <div>
+          <label>Season / Year</label><br/>
+          <input type="text" value="${esc(state.season)}" placeholder="e.g. 2026" onchange="state.season=this.value" style="width:100px;" />
+        </div>
+        <div>
+          <label>Division / League</label><br/>
+          <input type="text" value="${esc(state.division)}" placeholder="e.g. Minors, Majors" onchange="state.division=this.value" style="width:200px;" />
+        </div>
+        <div>
+          <label>Number of Teams</label><br/>
+          <select onchange="handleTeamCount(this.value)">
+            ${[2,3,4,5,6,7,8].map(n => `<option value="${n}" ${n === state.numTeams ? "selected" : ""}>${n}</option>`).join("")}
+          </select>
+        </div>
       </div>
       <div class="teams-grid">
         ${state.teams.map(t => `
@@ -901,6 +1120,7 @@ function renderSetup(app) {
 
   let html = `
     <div class="setup-header">
+      <div style="text-align:left;"><button class="btn-secondary btn-sm" onclick="goHome()">&larr; Home</button></div>
       <h1>Youth Baseball Draft</h1>
       <p class="subtitle">Configure teams, manage players, then start the draft</p>
     </div>
@@ -1100,7 +1320,7 @@ function renderSummary(app) {
   let html = `
     <div class="summary-header">
       <h1>Draft Complete!</h1>
-      <p class="subtitle">Final team rosters</p>
+      <p class="subtitle">${[state.season, state.division].filter(Boolean).join(" &mdash; ")}${state.season || state.division ? " &mdash; " : ""}Final team rosters</p>
     </div>
     <div class="summary-grid">
       ${state.draftOrder.map((tid, idx) => {
@@ -1135,11 +1355,134 @@ function renderSummary(app) {
       }).join("")}
     </div>
     <div class="summary-actions" style="display:flex;flex-wrap:wrap;gap:10px;justify-content:center;">
-      <button class="btn-primary" onclick="exportSportsEngine()">Export for SportsEngine</button>
+      <button class="btn-primary" onclick="archiveAndGoHome()">Save to Archive & Home</button>
+      <button class="btn-primary" onclick="exportSportsEngine()" style="background:#16a34a;">Export for SportsEngine</button>
       <button class="btn-secondary" onclick="exportDraftHistory()">Draft History (TXT)</button>
       <button class="btn-secondary" onclick="exportDraftHistoryCSV()">Draft History (CSV)</button>
       <button class="btn-secondary" onclick="window.print()">Print Summary</button>
-      <button class="btn-danger" onclick="resetDraft()">New Draft</button>
+    </div>
+  `;
+  app.innerHTML = html;
+}
+
+function renderArchive(app) {
+  let html = `
+    <div class="archive-screen">
+      <div style="text-align:left;margin-bottom:12px;"><button class="btn-secondary btn-sm" onclick="goHome()">&larr; Home</button></div>
+      <h1>Draft Archive</h1>
+      <p class="subtitle" style="text-align:center;">Past drafts organized by season and division</p>
+  `;
+
+  if (draftArchive.length === 0) {
+    html += '<div class="archive-empty card">No archived drafts yet. Completed drafts are automatically saved here.</div>';
+  } else {
+    // Group by season
+    const seasons = {};
+    draftArchive.forEach(e => {
+      const key = e.season || "Unknown";
+      if (!seasons[key]) seasons[key] = [];
+      seasons[key].push(e);
+    });
+
+    Object.keys(seasons).sort((a, b) => b.localeCompare(a)).forEach(season => {
+      html += `<h2 style="margin-top:20px;">Season ${esc(season)}</h2>`;
+      seasons[season].forEach(e => {
+        const d = new Date(e.date);
+        const dateStr = d.toLocaleDateString() + " " + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        html += `
+          <div class="archive-entry" onclick="viewArchiveEntry(${e.id})">
+            <h3>${esc(e.division || "General")} Draft</h3>
+            <div class="archive-meta">${dateStr} &mdash; ${e.numTeams} teams</div>
+            <div class="archive-teams">${e.teamNames.map(n => esc(n)).join(", ")}</div>
+            <div class="archive-actions-row" onclick="event.stopPropagation()">
+              <button class="btn-secondary btn-sm" onclick="viewArchiveEntry(${e.id})">View</button>
+              <button class="btn-danger btn-sm" onclick="deleteArchiveEntry(${e.id})">Delete</button>
+            </div>
+          </div>
+        `;
+      });
+    });
+  }
+
+  html += '</div>';
+  app.innerHTML = html;
+}
+
+function renderArchiveView(app) {
+  const entry = draftArchive.find(e => e.id === state.archiveViewId);
+  if (!entry) { state.screen = "archive"; render(); return; }
+
+  const s = entry.snapshot;
+  const players = entry.players;
+  const getP = (id) => players.find(p => p.id === id);
+  const getT = (id) => s.teams.find(t => t.id === id);
+  const getAllPlayers = (team) => [...team.preAssigned, ...team.drafted].map(id => getP(id)).filter(Boolean);
+  const teamColors = ["#2563eb","#dc2626","#16a34a","#9333ea","#ea580c","#0891b2","#be185d","#4f46e5"];
+  const d = new Date(entry.date);
+  const dateStr = d.toLocaleDateString();
+
+  let html = `
+    <div class="archive-screen">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+        <button class="btn-secondary btn-sm" onclick="state.screen='archive';render();">&larr; Back to Archive</button>
+        <button class="btn-secondary btn-sm" onclick="goHome()">Home</button>
+      </div>
+      <div class="summary-header">
+        <h1>${esc(entry.division || "General")} Draft</h1>
+        <p class="subtitle">Season ${esc(entry.season)} &mdash; ${dateStr} &mdash; ${entry.numTeams} teams</p>
+      </div>
+      <div class="summary-grid">
+        ${(s.draftOrder || []).map((tid, idx) => {
+          const t = getT(tid);
+          if (!t) return '';
+          const allP = getAllPlayers(t);
+          const y1p = allP.filter(p => p.year === 1 && !p.isCoachOnly);
+          const y2p = allP.filter(p => p.year === 2 && !p.isCoachOnly);
+          const coachOnly = t.preAssigned.map(id => getP(id)).filter(p => p && p.isCoachOnly);
+          const totalScore = allP.filter(p => !p.isCoachOnly).reduce((sum, p) => sum + p.score, 0);
+          const totalPlayers = allP.filter(p => !p.isCoachOnly).length;
+          return `<div class="card summary-card" style="border-left-color:${teamColors[idx % teamColors.length]}">
+            <h3>${esc(t.name)}</h3>
+            <div class="coach-info">${t.coachName ? 'Coach: ' + esc(t.coachName) + ' | ' : ''}Draft Position: #${idx + 1}</div>
+            ${y1p.length > 0 ? `<div class="year-group">
+              <h4>Year 1 &mdash; 2014 (${y1p.length})</h4>
+              <ul>${y1p.map(p => {
+                const badge = p.flag === 'C' ? ' <span class="head-coach-badge">HC</span>' : p.flag === 'A' ? ' <span class="asst-badge">AC</span>' : '';
+                return `<li><span>${esc(p.name)}${badge}</span><span class="score">${p.score}</span></li>`;
+              }).join("")}</ul>
+            </div>` : ''}
+            ${y2p.length > 0 ? `<div class="year-group">
+              <h4>Year 2 &mdash; 2013 (${y2p.length})</h4>
+              <ul>${y2p.map(p => {
+                const badge = p.flag === 'C' ? ' <span class="head-coach-badge">HC</span>' : p.flag === 'A' ? ' <span class="asst-badge">AC</span>' : '';
+                return `<li><span>${esc(p.name)}${badge}</span><span class="score">${p.score}</span></li>`;
+              }).join("")}</ul>
+            </div>` : ''}
+            ${coachOnly.length > 0 ? `<div class="year-group"><h4>Coaches</h4><ul>${coachOnly.map(p => `<li style="color:#94a3b8;font-style:italic;">${esc(p.name)} <span class="coach-only-badge">Coach</span></li>`).join("")}</ul></div>` : ''}
+            <div class="team-total"><span>Total Players: ${totalPlayers}</span><span>Total Score: ${totalScore}</span></div>
+          </div>`;
+        }).join("")}
+      </div>
+
+      <div class="card" style="margin-top:16px;">
+        <h3>Draft Log</h3>
+        <div class="draft-log" style="max-height:300px;">
+          ${(s.history || []).slice().reverse().map(h => {
+            if (h.type === "pre-assign") {
+              const p = getP(h.playerId);
+              const t = getT(h.teamId);
+              return `<div class="log-entry" style="color:#1e40af;"><span class="round-label">PRE:</span> ${esc(t?.name)} &larr; <strong>${esc(p?.name)}</strong> (${p?.score})</div>`;
+            }
+            const phLbl = h.phase === "year1" ? "Y1" : "Y2";
+            if (h.type === "trade") {
+              return `<div class="log-entry" style="color:#7c3aed;"><span class="round-label">${phLbl}:</span> <strong>${esc(h.description)}</strong></div>`;
+            }
+            const p = getP(h.playerId);
+            const t = getT(h.teamId);
+            return `<div class="log-entry"><span class="round-label">${phLbl} #${h.pickNumber}:</span> ${esc(t?.name)} drafted <strong>${esc(p?.name)}</strong> (${p?.score})</div>`;
+          }).join("")}
+        </div>
+      </div>
     </div>
   `;
   app.innerHTML = html;
@@ -1187,7 +1530,8 @@ function dismissTransition() {
 }
 
 // === INIT ===
-initTeams(state.numTeams);
+loadArchive();
+// Don't auto-init teams on home screen - wait for user choice
 render();
 </script>
 </body>
