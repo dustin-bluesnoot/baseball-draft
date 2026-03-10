@@ -397,8 +397,19 @@ function exportCSV() {
 
 function importCSV(csvText) {
   const lines = csvText.trim().split("\n").map(l => l.trim()).filter(l => l);
-  if (lines.length < 2) { alert("CSV must have a header row and at least one data row."); return; }
-  const header = lines[0].toLowerCase();
+  if (lines.length < 2) { alert("Must have a header row and at least one data row."); return; }
+
+  // Auto-detect tab-separated evaluation format (FIRST LAST P HIT Glove Total Coach Assistant)
+  const firstLine = lines[0];
+  const isTabFormat = firstLine.includes("\t");
+
+  if (isTabFormat) {
+    importTabFormat(lines);
+    return;
+  }
+
+  // CSV format
+  const header = firstLine.toLowerCase();
   if (!header.includes("name")) { alert("CSV header must include 'Name' column."); return; }
 
   const cols = lines[0].split(",").map(c => c.trim().toLowerCase());
@@ -429,6 +440,66 @@ function importCSV(csvText) {
       coachName: coachNameIdx >= 0 ? vals[coachNameIdx]?.trim() || "" : "",
     });
   }
+  if (newPlayers.length === 0) { alert("No valid player rows found."); return; }
+  if (confirm(`Import ${newPlayers.length} players? This will REPLACE all current players.`)) {
+    PLAYERS = newPlayers;
+    runAutoMatch();
+    state.coachAssignments = {};
+    render();
+  }
+}
+
+function importTabFormat(lines) {
+  // Parse tab-separated evaluation data
+  // Expected columns: FIRST, LAST, P/Pitch, HIT, Glove/Fielding, Total, Coach, Assistant
+  const headerCols = lines[0].split("\t").map(c => c.trim().toLowerCase());
+
+  // Map column indices flexibly
+  const firstIdx = headerCols.findIndex(c => c === "first" || c === "first name");
+  const lastIdx = headerCols.findIndex(c => c === "last" || c === "last name");
+  const nameIdx = headerCols.findIndex(c => c === "name");
+  const totalIdx = headerCols.findIndex(c => c === "total" || c === "total score" || c === "score");
+  const coachIdx = headerCols.findIndex(c => c === "coach");
+  const asstIdx = headerCols.findIndex(c => c === "assistant" || c === "asst" || c === "assistant coach");
+
+  // Need either first+last or name
+  const hasName = firstIdx >= 0 && lastIdx >= 0;
+  const hasSingleName = nameIdx >= 0;
+  if (!hasName && !hasSingleName) {
+    alert("Header must include 'First' and 'Last' columns (or a 'Name' column).");
+    return;
+  }
+
+  const newPlayers = [];
+  for (let i = 1; i < lines.length; i++) {
+    const vals = lines[i].split("\t").map(v => v.trim());
+    let playerName;
+    if (hasName) {
+      const first = vals[firstIdx] || "";
+      const last = vals[lastIdx] || "";
+      playerName = (first + " " + last).trim();
+    } else {
+      playerName = (vals[nameIdx] || "").trim();
+    }
+    if (!playerName) continue;
+
+    const scoreVal = totalIdx >= 0 ? parseFloat(vals[totalIdx]) || 0 : 0;
+    const isCoach = coachIdx >= 0 && (vals[coachIdx] || "").toUpperCase() === "X";
+    const isAsst = asstIdx >= 0 && (vals[asstIdx] || "").toUpperCase() === "X";
+    const flag = isCoach ? "C" : isAsst ? "A" : null;
+
+    newPlayers.push({
+      id: nextPlayerId++,
+      name: playerName,
+      dob: "",
+      year: null,
+      score: scoreVal,
+      flag: flag,
+      isCoachOnly: false,
+      coachName: "",
+    });
+  }
+
   if (newPlayers.length === 0) { alert("No valid player rows found."); return; }
   if (confirm(`Import ${newPlayers.length} players? This will REPLACE all current players.`)) {
     PLAYERS = newPlayers;
@@ -1234,9 +1305,13 @@ function renderSetup(app) {
   } else if (tab === "import") {
     tabContent = `
       <div class="card import-area">
-        <h2>Import Players from CSV</h2>
-        <p class="subtitle">Paste CSV data below. This will <strong>replace</strong> all current players. Required column: Name. Optional: DOB, Year, Score, Flag, CoachOnly.</p>
-        <textarea id="importText" placeholder="Name,DOB,Year,Score,Flag,CoachOnly\nJohn Smith,3/15/2014,1,12,,No"></textarea>
+        <h2>Import Players</h2>
+        <p class="subtitle">Paste player data below (CSV or tab-separated from a spreadsheet). This will <strong>replace</strong> all current players.</p>
+        <p class="subtitle" style="font-size:0.8em;color:#64748b;margin-top:4px;">
+          <strong>CSV:</strong> Name, DOB, Year, Score, Flag, CoachOnly &nbsp;|&nbsp;
+          <strong>Tab/Spreadsheet:</strong> First, Last, P, Hit, Glove, Total, Coach (X), Assistant (X)
+        </p>
+        <textarea id="importText" placeholder="Paste CSV or tab-separated data from a spreadsheet here..."></textarea>
         <div style="display:flex;gap:8px;margin-top:8px;">
           <button class="btn-primary btn-sm" onclick="importCSV(document.getElementById('importText').value)">Import</button>
           <button class="btn-secondary btn-sm" onclick="showSampleCSV()">Load Sample CSV</button>
