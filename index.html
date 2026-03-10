@@ -193,32 +193,32 @@
 <script>
 // === PLAYER DATA ===
 let PLAYERS = [
-  { id: 1,  name: "Rocco Steen",          dob: "8/3/2014",    year: 1, score: 18,   flag: "A", isCoachOnly: false },
-  { id: 2,  name: "Bowen Clarke",         dob: "6/24/2014",   year: 1, score: 15,   flag: "A", isCoachOnly: false },
-  { id: 3,  name: "Liam Back",            dob: "5/8/2014",    year: 1, score: 14.5, flag: null, isCoachOnly: false },
-  { id: 4,  name: "Marcus McHardy",       dob: "9/16/2014",   year: 1, score: 14,   flag: null, isCoachOnly: false },
-  { id: 5,  name: "Odin Nerreter",        dob: "5/7/2013",    year: 2, score: 14,   flag: null, isCoachOnly: false },
-  { id: 6,  name: "Max Schwabe",          dob: "6/24/2014",   year: 1, score: 14,   flag: "C", isCoachOnly: false },
-  { id: 7,  name: "Malachi Lawn",         dob: "2/21/2014",   year: 1, score: 13.5, flag: null, isCoachOnly: false },
-  { id: 8,  name: "Linden Morrison",      dob: "9/4/2014",    year: 1, score: 12,   flag: null, isCoachOnly: false },
-  { id: 9,  name: "Ryan Chatha",          dob: "3/14/2014",   year: 1, score: 11,   flag: "A", isCoachOnly: false },
-  { id: 10, name: "Merrick Turner",       dob: "5/28/2014",   year: 1, score: 11,   flag: "A", isCoachOnly: false },
-  { id: 11, name: "Louis De Paulo",       dob: "6/18/2014",   year: 1, score: 8,    flag: null, isCoachOnly: false },
-  { id: 12, name: "Jamie Munns",          dob: "1/17/2013",   year: 2, score: 8,    flag: null, isCoachOnly: false },
-  { id: 13, name: "Noah Classen",         dob: "5/18/2013",   year: 2, score: 6,    flag: null, isCoachOnly: false },
-  { id: 14, name: "Royce Genschorek",     dob: "8/1/2013",    year: 2, score: 6,    flag: null, isCoachOnly: false },
-  { id: 15, name: "Felix Schroeder",      dob: "9/17/2013",   year: 2, score: 6,    flag: null, isCoachOnly: false },
-  { id: 16, name: "Quinn Andersen",       dob: "7/10/2014",   year: 1, score: 0,    flag: null, isCoachOnly: false },
-  { id: 17, name: "Jimmy Cofman",         dob: "5/18/2013",   year: 2, score: 0,    flag: null, isCoachOnly: false },
-  { id: 18, name: "Henry Crocker",        dob: "10/23/2014",  year: 1, score: 0,    flag: null, isCoachOnly: false },
-  { id: 19, name: "Lyndon Dyck",          dob: "5/20/2014",   year: 1, score: 0,    flag: "A", isCoachOnly: false },
-  { id: 20, name: "Benjamin Hewson",      dob: "7/29/2014",   year: 1, score: 0,    flag: null, isCoachOnly: false },
-  { id: 21, name: "Ezra Hill",            dob: "8/21/2014",   year: 1, score: 0,    flag: null, isCoachOnly: false },
-  { id: 22, name: "June Lee",             dob: "8/19/2014",   year: 1, score: 0,    flag: null, isCoachOnly: false },
-  { id: 23, name: "Rooke Russell-Coutts", dob: "8/4/2013",    year: 2, score: 0,    flag: "A", isCoachOnly: false },
-  { id: 24, name: "Sam Sarkissen",        dob: null,          year: null, score: 0, flag: "C", isCoachOnly: true },
-  { id: 25, name: "Everett Urton",        dob: "8/9/2013",    year: 2, score: 0,    flag: null, isCoachOnly: false },
-  { id: 26, name: "Sam Whitney",          dob: "1/13/2014",   year: 1, score: 0,    flag: null, isCoachOnly: false },
+  { id: 1,  name: "Rocco Steen",          dob: "8/3/2014",    year: 1, score: 18,   flag: "A", isCoachOnly: false, coachName: "Jamie Steen" },
+  { id: 2,  name: "Bowen Clarke",         dob: "6/24/2014",   year: 1, score: 15,   flag: "A", isCoachOnly: false, coachName: "" },
+  { id: 3,  name: "Liam Back",            dob: "5/8/2014",    year: 1, score: 14.5, flag: null, isCoachOnly: false, coachName: "" },
+  { id: 4,  name: "Marcus McHardy",       dob: "9/16/2014",   year: 1, score: 14,   flag: null, isCoachOnly: false, coachName: "" },
+  { id: 5,  name: "Odin Nerreter",        dob: "5/7/2013",    year: 2, score: 14,   flag: null, isCoachOnly: false, coachName: "" },
+  { id: 6,  name: "Max Schwabe",          dob: "6/24/2014",   year: 1, score: 14,   flag: "C", isCoachOnly: false, coachName: "" },
+  { id: 7,  name: "Malachi Lawn",         dob: "2/21/2014",   year: 1, score: 13.5, flag: null, isCoachOnly: false, coachName: "" },
+  { id: 8,  name: "Linden Morrison",      dob: "9/4/2014",    year: 1, score: 12,   flag: null, isCoachOnly: false, coachName: "" },
+  { id: 9,  name: "Ryan Chatha",          dob: "3/14/2014",   year: 1, score: 11,   flag: "A", isCoachOnly: false, coachName: "" },
+  { id: 10, name: "Merrick Turner",       dob: "5/28/2014",   year: 1, score: 11,   flag: "A", isCoachOnly: false, coachName: "" },
+  { id: 11, name: "Louis De Paulo",       dob: "6/18/2014",   year: 1, score: 8,    flag: null, isCoachOnly: false, coachName: "" },
+  { id: 12, name: "Jamie Munns",          dob: "1/17/2013",   year: 2, score: 8,    flag: null, isCoachOnly: false, coachName: "" },
+  { id: 13, name: "Noah Classen",         dob: "5/18/2013",   year: 2, score: 6,    flag: null, isCoachOnly: false, coachName: "" },
+  { id: 14, name: "Royce Genschorek",     dob: "8/1/2013",    year: 2, score: 6,    flag: null, isCoachOnly: false, coachName: "" },
+  { id: 15, name: "Felix Schroeder",      dob: "9/17/2013",   year: 2, score: 6,    flag: null, isCoachOnly: false, coachName: "" },
+  { id: 16, name: "Quinn Andersen",       dob: "7/10/2014",   year: 1, score: 0,    flag: null, isCoachOnly: false, coachName: "" },
+  { id: 17, name: "Jimmy Cofman",         dob: "5/18/2013",   year: 2, score: 0,    flag: null, isCoachOnly: false, coachName: "" },
+  { id: 18, name: "Henry Crocker",        dob: "10/23/2014",  year: 1, score: 0,    flag: null, isCoachOnly: false, coachName: "" },
+  { id: 19, name: "Lyndon Dyck",          dob: "5/20/2014",   year: 1, score: 0,    flag: "A", isCoachOnly: false, coachName: "" },
+  { id: 20, name: "Benjamin Hewson",      dob: "7/29/2014",   year: 1, score: 0,    flag: null, isCoachOnly: false, coachName: "" },
+  { id: 21, name: "Ezra Hill",            dob: "8/21/2014",   year: 1, score: 0,    flag: null, isCoachOnly: false, coachName: "" },
+  { id: 22, name: "June Lee",             dob: "8/19/2014",   year: 1, score: 0,    flag: null, isCoachOnly: false, coachName: "" },
+  { id: 23, name: "Rooke Russell-Coutts", dob: "8/4/2013",    year: 2, score: 0,    flag: "A", isCoachOnly: false, coachName: "" },
+  { id: 24, name: "Sam Sarkissen",        dob: null,          year: null, score: 0, flag: "C", isCoachOnly: true, coachName: "" },
+  { id: 25, name: "Everett Urton",        dob: "8/9/2013",    year: 2, score: 0,    flag: null, isCoachOnly: false, coachName: "" },
+  { id: 26, name: "Sam Whitney",          dob: "1/13/2014",   year: 1, score: 0,    flag: null, isCoachOnly: false, coachName: "" },
 ];
 
 let nextPlayerId = PLAYERS.length > 0 ? Math.max(...PLAYERS.map(p => p.id)) + 1 : 1;
@@ -271,7 +271,10 @@ function getAllTeamPlayers(team) {
 }
 
 function calcCoachChildrenScore(team) {
-  return team.preAssigned.reduce((sum, id) => sum + (getPlayer(id)?.score || 0), 0);
+  return team.preAssigned.reduce((sum, id) => {
+    const p = getPlayer(id);
+    return sum + (p && !p.isCoachOnly ? p.score : 0);
+  }, 0);
 }
 
 function calcTotalTeamScore(team) {
@@ -279,18 +282,53 @@ function calcTotalTeamScore(team) {
 }
 
 function getNextPickTeamId() {
-  // Team with lowest total score picks next; ties broken by original draft order position
-  return [...state.draftOrder].sort((a, b) => {
+  // Team with lowest total score picks next.
+  // Tiebreaker: if tied, the team that just picked goes to the back of the tied group.
+  const lastPickTeamId = state.currentPickTeamId;
+  const sorted = [...state.draftOrder].sort((a, b) => {
     const scoreA = calcTotalTeamScore(getTeam(a));
     const scoreB = calcTotalTeamScore(getTeam(b));
     if (scoreA !== scoreB) return scoreA - scoreB;
+    // Same score: team that just picked sorts last among tied teams
+    const aJustPicked = (a === lastPickTeamId) ? 1 : 0;
+    const bJustPicked = (b === lastPickTeamId) ? 1 : 0;
+    if (aJustPicked !== bJustPicked) return aJustPicked - bJustPicked;
     return state.draftOrder.indexOf(a) - state.draftOrder.indexOf(b);
-  })[0];
+  });
+  return sorted[0];
+}
+
+function getLastName(fullName) {
+  const parts = (fullName || "").trim().split(/\s+/);
+  return parts.length > 1 ? parts[parts.length - 1].toLowerCase() : "";
+}
+
+// Smart match: when a player gets flagged as C or A, try to find a matching
+// coachOnly entry by last name, or auto-suggest a coach name
+function autoMatchCoach(player) {
+  if (!player.flag || player.isCoachOnly) return;
+  if (player.coachName) return; // already set
+
+  const playerLast = getLastName(player.name);
+  if (!playerLast) return;
+
+  // Look for a coachOnly entry with the same last name
+  const coachMatch = PLAYERS.find(p =>
+    p.isCoachOnly && p.id !== player.id && getLastName(p.name) === playerLast
+  );
+  if (coachMatch) {
+    player.coachName = coachMatch.name;
+  }
+}
+
+// Run auto-match on all flagged players
+function runAutoMatch() {
+  PLAYERS.filter(p => p.flag && !p.isCoachOnly).forEach(p => autoMatchCoach(p));
 }
 
 // === PLAYER MANAGEMENT ===
 function addPlayer() {
-  PLAYERS.push({ id: nextPlayerId++, name: "New Player", dob: "", year: 1, score: 0, flag: null, isCoachOnly: false });
+  PLAYERS.push({ id: nextPlayerId++, name: "New Player", dob: "", year: 1, score: 0, flag: null, isCoachOnly: false, coachName: "" });
   render();
 }
 
@@ -308,24 +346,30 @@ function updatePlayer(id, field, value) {
   else if (field === "dob") p.dob = value;
   else if (field === "year") { p.year = value === "" ? null : Number(value); }
   else if (field === "score") p.score = parseFloat(value) || 0;
-  else if (field === "flag") { p.flag = value || null; p.isCoachOnly = false; }
-  else if (field === "isCoachOnly") { p.isCoachOnly = value; if (value) { p.flag = p.flag || "C"; } }
+  else if (field === "flag") {
+    p.flag = value || null;
+    p.isCoachOnly = false;
+    if (value) { p.coachName = p.coachName || ""; autoMatchCoach(p); }
+    else { p.coachName = ""; }
+  }
+  else if (field === "isCoachOnly") { p.isCoachOnly = value; if (value) { p.flag = p.flag || "C"; p.score = 0; } }
+  else if (field === "coachName") { p.coachName = value; }
 }
 
 function getCSVSample() {
-  return `Name,DOB,Year,Score,Flag,CoachOnly
-Rocco Steen,8/3/2014,1,18,A,No
-Bowen Clarke,6/24/2014,1,15,A,No
-Liam Back,5/8/2014,1,14.5,,No
-Max Schwabe,6/24/2014,1,14,C,No
-Sam Sarkissen,,,0,C,Yes
-Quinn Andersen,7/10/2014,1,0,,No`;
+  return `Name,DOB,Year,Score,Flag,CoachOnly,CoachName
+Rocco Steen,8/3/2014,1,18,A,No,Jamie Steen
+Bowen Clarke,6/24/2014,1,15,A,No,
+Liam Back,5/8/2014,1,14.5,,No,
+Max Schwabe,6/24/2014,1,14,C,No,
+Sam Sarkissen,,,0,C,Yes,
+Quinn Andersen,7/10/2014,1,0,,No,`;
 }
 
 function exportCSV() {
-  const header = "Name,DOB,Year,Score,Flag,CoachOnly";
+  const header = "Name,DOB,Year,Score,Flag,CoachOnly,CoachName";
   const rows = PLAYERS.map(p =>
-    `${p.name},${p.dob || ""},${p.year || ""},${p.score},${p.flag || ""},${p.isCoachOnly ? "Yes" : "No"}`
+    `${p.name},${p.dob || ""},${p.year || ""},${p.score},${p.flag || ""},${p.isCoachOnly ? "Yes" : "No"},${p.coachName || ""}`
   );
   const csv = [header, ...rows].join("\n");
   const blob = new Blob([csv], { type: "text/csv" });
@@ -348,6 +392,7 @@ function importCSV(csvText) {
   const scoreIdx = cols.indexOf("score");
   const flagIdx = cols.indexOf("flag");
   const coachIdx = cols.findIndex(c => c === "coachonly" || c === "coach only" || c === "coach_only");
+  const coachNameIdx = cols.findIndex(c => c === "coachname" || c === "coach name" || c === "coach_name");
 
   const newPlayers = [];
   for (let i = 1; i < lines.length; i++) {
@@ -362,14 +407,16 @@ function importCSV(csvText) {
       name: vals[nameIdx].trim(),
       dob: dobIdx >= 0 ? vals[dobIdx]?.trim() || "" : "",
       year: yearVal === "" ? null : Number(yearVal),
-      score: scoreIdx >= 0 ? parseFloat(vals[scoreIdx]) || 0 : 0,
+      score: scoreIdx >= 0 ? (isCoach ? 0 : parseFloat(vals[scoreIdx]) || 0) : 0,
       flag: flagVal || null,
       isCoachOnly: isCoach,
+      coachName: coachNameIdx >= 0 ? vals[coachNameIdx]?.trim() || "" : "",
     });
   }
   if (newPlayers.length === 0) { alert("No valid player rows found."); return; }
   if (confirm(`Import ${newPlayers.length} players? This will REPLACE all current players.`)) {
     PLAYERS = newPlayers;
+    runAutoMatch();
     state.coachAssignments = {};
     render();
   }
@@ -418,17 +465,32 @@ function exportSportsEngine() {
 
   state.teams.forEach(t => {
     const allPlayers = getAllTeamPlayers(t).filter(p => !p.isCoachOnly);
+    const addedCoaches = new Set();
     allPlayers.forEach(p => {
       const { first, last } = splitName(p.name);
-      // Convert DOB from M/D/YYYY to MM/DD/YYYY for consistency
       const dob = p.dob || "";
       rows.push(`${csvEscape(first)},${csvEscape(last)},${csvEscape(t.name)},${csvEscape(divisionName)},${csvEscape(dob)},`);
+
+      // Add the coach/parent as a roster entry with their role
+      if (p.coachName) {
+        const { first: cFirst, last: cLast } = splitName(p.coachName);
+        const role = p.flag === "C" ? "Head Coach" : "Assistant Coach";
+        const key = p.coachName.toLowerCase();
+        if (!addedCoaches.has(key)) {
+          rows.push(`${csvEscape(cFirst)},${csvEscape(cLast)},${csvEscape(t.name)},${csvEscape(divisionName)},,${role}`);
+          addedCoaches.add(key);
+        }
+      }
     });
 
-    // Also add coach-only entries as staff
+    // Also add coach-only entries as staff (if not already added via coachName)
     t.preAssigned.map(id => getPlayer(id)).filter(p => p && p.isCoachOnly).forEach(p => {
-      const { first, last } = splitName(p.name);
-      rows.push(`${csvEscape(first)},${csvEscape(last)},${csvEscape(t.name)},${csvEscape(divisionName)},,Head Coach`);
+      const key = p.name.toLowerCase();
+      if (!addedCoaches.has(key)) {
+        const { first, last } = splitName(p.name);
+        rows.push(`${csvEscape(first)},${csvEscape(last)},${csvEscape(t.name)},${csvEscape(divisionName)},,Head Coach`);
+        addedCoaches.add(key);
+      }
     });
   });
 
@@ -495,11 +557,11 @@ function exportDraftHistory() {
     const y2 = allPlayers.filter(p => p.year === 2);
     if (y1.length > 0) {
       lines.push("    Year 1 (2014):");
-      y1.forEach(p => lines.push(`      ${p.name} - ${p.score}${p.flag ? " [" + (p.flag === "C" ? "HC" : "AC") + "]" : ""}`));
+      y1.forEach(p => lines.push(`      ${p.name} - ${p.score}${p.flag ? " [" + (p.flag === "C" ? "HC" : "AC") + "]" : ""}${p.coachName ? " (Coach: " + p.coachName + ")" : ""}`));
     }
     if (y2.length > 0) {
       lines.push("    Year 2 (2013):");
-      y2.forEach(p => lines.push(`      ${p.name} - ${p.score}${p.flag ? " [" + (p.flag === "C" ? "HC" : "AC") + "]" : ""}`));
+      y2.forEach(p => lines.push(`      ${p.name} - ${p.score}${p.flag ? " [" + (p.flag === "C" ? "HC" : "AC") + "]" : ""}${p.coachName ? " (Coach: " + p.coachName + ")" : ""}`));
     }
   });
 
@@ -1028,6 +1090,7 @@ function renderSetup(app) {
         const renderRow = (p) => `
               <tr>
                 <td>${esc(p.name)} ${p.isCoachOnly ? '<span class="coach-only-badge">Coach Only</span>' : ''}</td>
+                <td>${p.coachName ? esc(p.coachName) : '<span style="color:#94a3b8;">Not set</span>'}</td>
                 <td>${p.year ? "Year " + p.year + " (" + (p.year === 1 ? "2014" : "2013") + ")" : "N/A"}</td>
                 <td>${p.score}</td>
                 <td>
@@ -1040,17 +1103,17 @@ function renderSetup(app) {
         return `
       <div class="card coach-assign-section">
         <h2>Assign to Teams</h2>
-        <p class="subtitle">Assigned players are pre-placed on rosters. Their scores determine draft order (lowest total picks first).</p>
+        <p class="subtitle">Assigned players are pre-placed on rosters. Coaches follow their child (score 0, no effect on draft order). Set coach names in the Players tab.</p>
         ${headCoach.length > 0 ? `
         <div class="assign-group-label"><span class="head-coach-badge">HC</span> Head Coach's Children <span style="color:#dc2626;">*required</span></div>
         <table class="coach-assign-table">
-          <thead><tr><th>Name</th><th>Year</th><th>Score</th><th>Assign to Team</th></tr></thead>
+          <thead><tr><th>Player</th><th>Coach/Parent</th><th>Year</th><th>Score</th><th>Assign to Team</th></tr></thead>
           <tbody>${headCoach.map(renderRow).join("")}</tbody>
         </table>` : ''}
         ${assistants.length > 0 ? `
         <div class="assign-group-label"><span class="asst-badge">AC</span> Assistant Coach's Children <span class="optional-note">(optional &mdash; unassigned players enter the draft pool)</span></div>
         <table class="coach-assign-table">
-          <thead><tr><th>Name</th><th>Year</th><th>Score</th><th>Assign to Team</th></tr></thead>
+          <thead><tr><th>Player</th><th>Coach/Parent</th><th>Year</th><th>Score</th><th>Assign to Team</th></tr></thead>
           <tbody>${assistants.map(renderRow).join("")}</tbody>
         </table>` : ''}
       </div>`;
@@ -1074,6 +1137,7 @@ function renderSetup(app) {
               <th class="narrow">Year</th>
               <th class="narrow">Score</th>
               <th class="narrow">Flag</th>
+              <th>Coach/Parent Name</th>
               <th class="narrow">Coach Only</th>
               <th class="action-col"></th>
             </tr></thead>
@@ -1093,6 +1157,7 @@ function renderSetup(app) {
                     <option value="A" ${p.flag === "A" ? "selected" : ""}>A</option>
                     <option value="C" ${p.flag === "C" ? "selected" : ""}>C</option>
                   </select></td>
+                  <td>${p.flag ? `<input type="text" value="${esc(p.coachName || '')}" placeholder="Coach full name" onchange="updatePlayer(${p.id},'coachName',this.value)" style="width:140px;" />` : '<span style="color:#cbd5e1;">-</span>'}</td>
                   <td style="text-align:center;"><input type="checkbox" ${p.isCoachOnly ? "checked" : ""} onchange="updatePlayer(${p.id},'isCoachOnly',this.checked)" /></td>
                   <td><button class="delete-btn" onclick="removePlayer(${p.id})" title="Remove">&times;</button></td>
                 </tr>
@@ -1206,7 +1271,8 @@ function renderDraft(app) {
               ${t.preAssigned.filter(id => !getPlayer(id).isCoachOnly).map(id => {
                 const p = getPlayer(id);
                 const badge = p.flag === "C" ? '<span class="head-coach-badge">HC</span>' : '<span class="asst-badge">AC</span>';
-                return `<li>${esc(p.name)} ${badge} <span class="score">${p.score}</span></li>`;
+                const coach = p.coachName ? `<span style="font-size:0.8em;color:#64748b;"> (${esc(p.coachName)})</span>` : '';
+                return `<li>${esc(p.name)}${coach} ${badge} <span class="score">${p.score}</span></li>`;
               }).join("")}
               ${t.preAssigned.filter(id => getPlayer(id).isCoachOnly).map(id => {
                 const p = getPlayer(id);
@@ -1339,14 +1405,16 @@ function renderSummary(app) {
             <h4>Year 1 &mdash; 2014 (${y1players.length})</h4>
             <ul>${y1players.map(p => {
               const badge = p.flag === 'C' ? ' <span class="head-coach-badge">HC</span>' : p.flag === 'A' ? ' <span class="asst-badge">AC</span>' : '';
-              return `<li><span>${esc(p.name)}${badge}</span><span class="score">${p.score}</span></li>`;
+              const coach = p.coachName ? `<br/><span style="font-size:0.8em;color:#64748b;padding-left:8px;">Coach: ${esc(p.coachName)}</span>` : '';
+              return `<li><span>${esc(p.name)}${badge}${coach}</span><span class="score">${p.score}</span></li>`;
             }).join("")}</ul>
           </div>` : ''}
           ${y2players.length > 0 ? `<div class="year-group">
             <h4>Year 2 &mdash; 2013 (${y2players.length})</h4>
             <ul>${y2players.map(p => {
               const badge = p.flag === 'C' ? ' <span class="head-coach-badge">HC</span>' : p.flag === 'A' ? ' <span class="asst-badge">AC</span>' : '';
-              return `<li><span>${esc(p.name)}${badge}</span><span class="score">${p.score}</span></li>`;
+              const coach = p.coachName ? `<br/><span style="font-size:0.8em;color:#64748b;padding-left:8px;">Coach: ${esc(p.coachName)}</span>` : '';
+              return `<li><span>${esc(p.name)}${badge}${coach}</span><span class="score">${p.score}</span></li>`;
             }).join("")}</ul>
           </div>` : ''}
           ${coachOnly.length > 0 ? `<div class="year-group"><h4>Coaches</h4><ul>${coachOnly.map(p => `<li style="color:#94a3b8;font-style:italic;">${esc(p.name)} <span class="coach-only-badge">Coach</span></li>`).join("")}</ul></div>` : ''}
