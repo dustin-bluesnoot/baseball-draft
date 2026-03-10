@@ -151,6 +151,22 @@
   .draft-meta-row input, .draft-meta-row select { padding: 6px 10px; font-size: 0.9em; }
 
   /* Trade Panel */
+  /* Zero-score rotation modal */
+  .zero-score-overlay { background: rgba(0,0,0,0.5); position: fixed; inset: 0; z-index: 200; display: flex; align-items: center; justify-content: center; }
+  .zero-score-modal { background: #fff; border-radius: 12px; padding: 28px; max-width: 480px; width: 92%; box-shadow: 0 20px 60px rgba(0,0,0,0.3); animation: fadeIn 0.2s; }
+  .zero-score-modal h3 { margin-bottom: 12px; text-align: center; font-size: 1.15em; }
+  .zero-score-modal .zs-message { color: #475569; font-size: 0.92em; margin-bottom: 16px; text-align: center; }
+  .zero-score-modal .zs-scores { margin-bottom: 18px; }
+  .zero-score-modal .zs-score-row { display: flex; justify-content: space-between; padding: 6px 10px; border-radius: 6px; font-size: 0.9em; }
+  .zero-score-modal .zs-score-row.current { background: #fef3c7; font-weight: 600; }
+  .zero-score-modal .zs-score-row.next { background: #dbeafe; }
+  .zero-score-modal .zs-buttons { display: flex; gap: 10px; justify-content: center; margin-top: 8px; }
+  .zero-score-modal .zs-buttons button { padding: 10px 28px; border-radius: 8px; font-size: 0.95em; font-weight: 600; cursor: pointer; border: none; }
+  .zero-score-modal .zs-btn-yes { background: #2563eb; color: #fff; }
+  .zero-score-modal .zs-btn-yes:hover { background: #1d4ed8; }
+  .zero-score-modal .zs-btn-no { background: #e2e8f0; color: #334155; }
+  .zero-score-modal .zs-btn-no:hover { background: #cbd5e1; }
+
   .trade-overlay { background: rgba(0,0,0,0.5); position: fixed; inset: 0; z-index: 100; display: flex; align-items: center; justify-content: center; }
   .trade-panel { background: #fff; border-radius: 12px; padding: 24px; max-width: 800px; width: 95%; max-height: 90vh; overflow-y: auto; box-shadow: 0 20px 60px rgba(0,0,0,0.3); }
   .trade-panel h2 { margin-bottom: 12px; text-align: center; }
@@ -811,20 +827,33 @@ function draftPlayer(playerId) {
   const nextTeam = getNextPickTeamId();
   const player = getPlayer(playerId);
 
-  // If a 0-score player was picked and the same team would pick again, ask if they want to rotate
+  // If a 0-score player was picked and the same team would pick again, show rotation modal
   if (player && player.score === 0 && nextTeam === teamId && getAvailablePlayers().length > 0) {
     const otherTeams = getSortedTeamsForPick(teamId);
     if (otherTeams.length > 0) {
-      const nextTeamName = getTeam(otherTeams[0])?.name || "next team";
-      if (confirm(`${team.name} picked a 0-score player and still has the lowest score.\n\nMove to ${nextTeamName} instead?`)) {
-        state.currentPickTeamId = otherTeams[0];
-        render();
-        return;
-      }
+      state.zeroScoreModal = {
+        currentTeamId: teamId,
+        suggestedTeamId: otherTeams[0],
+        defaultNextTeamId: nextTeam,
+        playerName: player.name
+      };
+      render();
+      return;
     }
   }
 
   state.currentPickTeamId = nextTeam;
+  render();
+}
+
+function resolveZeroScoreModal(moveToNext) {
+  if (!state.zeroScoreModal) return;
+  if (moveToNext) {
+    state.currentPickTeamId = state.zeroScoreModal.suggestedTeamId;
+  } else {
+    state.currentPickTeamId = state.zeroScoreModal.defaultNextTeamId;
+  }
+  state.zeroScoreModal = null;
   render();
 }
 
@@ -1407,6 +1436,43 @@ function renderDraft(app) {
         <div class="trade-actions">
           <button class="btn-primary" onclick="confirmTrade()" ${!canConfirm ? "disabled" : ""}>Confirm Trade</button>
           <button class="btn-secondary" onclick="closeTrade()">Cancel</button>
+        </div>
+      </div>
+    </div>`;
+  }
+
+  // Zero-score rotation modal
+  if (state.zeroScoreModal) {
+    const m = state.zeroScoreModal;
+    const currentTeam = getTeam(m.currentTeamId);
+    const suggestedTeam = getTeam(m.suggestedTeamId);
+    // Build score table for all teams sorted by score
+    const sortedTeams = [...state.draftOrder].map(id => {
+      const t = getTeam(id);
+      return { id, name: t.name, score: calcTotalTeamScore(t) };
+    }).sort((a, b) => a.score - b.score);
+
+    html += `<div class="zero-score-overlay" onclick="if(event.target===this)resolveZeroScoreModal(false)">
+      <div class="zero-score-modal">
+        <h3>Zero-Score Player Drafted</h3>
+        <div class="zs-message">
+          <strong>${esc(currentTeam.name)}</strong> drafted <strong>${esc(m.playerName)}</strong> (score 0).<br>
+          Their total score is unchanged &mdash; they still have the lowest score.
+        </div>
+        <div class="zs-scores">
+          <div style="font-size:0.8em;color:#64748b;font-weight:600;margin-bottom:6px;padding:0 10px;">TEAM SCORES</div>
+          ${sortedTeams.map(t => {
+            const isCurrent = t.id === m.currentTeamId;
+            const isNext = t.id === m.suggestedTeamId;
+            const cls = isCurrent ? 'current' : isNext ? 'next' : '';
+            const label = isCurrent ? ' (current)' : isNext ? ' (next)' : '';
+            return `<div class="zs-score-row ${cls}"><span>${esc(t.name)}${label}</span><span>${t.score}</span></div>`;
+          }).join("")}
+        </div>
+        <div class="zs-message" style="font-size:0.88em;">Move pick to <strong>${esc(suggestedTeam.name)}</strong>?</div>
+        <div class="zs-buttons">
+          <button class="zs-btn-yes" onclick="resolveZeroScoreModal(true)">Yes</button>
+          <button class="zs-btn-no" onclick="resolveZeroScoreModal(false)">No</button>
         </div>
       </div>
     </div>`;
