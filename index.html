@@ -364,6 +364,159 @@ function showSampleCSV() {
   document.getElementById("importText").value = getCSVSample();
 }
 
+// === EXPORT FUNCTIONS ===
+
+function splitName(fullName) {
+  const parts = (fullName || "").trim().split(/\s+/);
+  if (parts.length <= 1) return { first: parts[0] || "", last: "" };
+  return { first: parts[0], last: parts.slice(1).join(" ") };
+}
+
+function exportSportsEngine() {
+  // SportsEngine Team Import CSV format
+  // Required: First Name, Last Name, Team Name, Division Name
+  // Optional: Birthdate, Position, Jersey Number, Email
+  const divisionName = prompt("Enter the Division/League name for SportsEngine:", "Youth Baseball") || "Youth Baseball";
+
+  const header = "First Name,Last Name,Team Name,Division Name,Birthdate,Position";
+  const rows = [];
+
+  state.teams.forEach(t => {
+    const allPlayers = getAllTeamPlayers(t).filter(p => !p.isCoachOnly);
+    allPlayers.forEach(p => {
+      const { first, last } = splitName(p.name);
+      // Convert DOB from M/D/YYYY to MM/DD/YYYY for consistency
+      const dob = p.dob || "";
+      rows.push(`${csvEscape(first)},${csvEscape(last)},${csvEscape(t.name)},${csvEscape(divisionName)},${csvEscape(dob)},`);
+    });
+
+    // Also add coach-only entries as staff
+    t.preAssigned.map(id => getPlayer(id)).filter(p => p && p.isCoachOnly).forEach(p => {
+      const { first, last } = splitName(p.name);
+      rows.push(`${csvEscape(first)},${csvEscape(last)},${csvEscape(t.name)},${csvEscape(divisionName)},,Head Coach`);
+    });
+  });
+
+  downloadFile("sportsengine_import.csv", [header, ...rows].join("\n"), "text/csv");
+}
+
+function exportDraftHistory() {
+  const lines = [];
+  lines.push("=== YOUTH BASEBALL DRAFT HISTORY ===");
+  lines.push(`Date: ${new Date().toLocaleDateString()}`);
+  lines.push(`Teams: ${state.teams.map(t => t.name).join(", ")}`);
+  lines.push("");
+
+  // Draft order info
+  lines.push("--- INITIAL DRAFT ORDER (by coach children score) ---");
+  state.draftOrder.forEach((tid, i) => {
+    const t = getTeam(tid);
+    lines.push(`  #${i + 1}: ${t.name} (coach score: ${t.coachChildrenScore})`);
+  });
+  lines.push("");
+
+  // Pre-assignments
+  lines.push("--- PRE-ASSIGNED PLAYERS ---");
+  state.teams.forEach(t => {
+    const pre = t.preAssigned.map(id => getPlayer(id)).filter(Boolean);
+    if (pre.length > 0) {
+      pre.forEach(p => {
+        const role = p.isCoachOnly ? "Coach Only" : (p.flag === "C" ? "Head Coach Child" : "Asst Coach Child");
+        lines.push(`  ${t.name}: ${p.name} (${role}, score: ${p.score})`);
+      });
+    }
+  });
+  lines.push("");
+
+  // Chronological draft log
+  lines.push("--- DRAFT LOG ---");
+  let pickNum = 0;
+  state.history.forEach(h => {
+    const time = h.timestamp ? new Date(h.timestamp).toLocaleTimeString() : "";
+    if (h.type === "pre-assign") {
+      const p = getPlayer(h.playerId);
+      const t = getTeam(h.teamId);
+      lines.push(`  [PRE] ${t.name} <- ${p.name} (score: ${p.score}) ${time}`);
+    } else if (h.type === "trade") {
+      lines.push(`  [TRADE] ${h.description} ${time}`);
+    } else {
+      pickNum++;
+      const p = getPlayer(h.playerId);
+      const t = getTeam(h.teamId);
+      const phLbl = h.phase === "year1" ? "Y1" : "Y2";
+      lines.push(`  ${phLbl} Pick #${pickNum}: ${t.name} drafted ${p.name} (score: ${p.score}) ${time}`);
+    }
+  });
+  lines.push("");
+
+  // Final rosters
+  lines.push("--- FINAL ROSTERS ---");
+  state.teams.forEach(t => {
+    const allPlayers = getAllTeamPlayers(t).filter(p => !p.isCoachOnly);
+    const totalScore = allPlayers.reduce((s, p) => s + p.score, 0);
+    lines.push(`\n  ${t.name} (Total Score: ${totalScore}, Players: ${allPlayers.length})`);
+    if (t.coachName) lines.push(`    Coach: ${t.coachName}`);
+    const y1 = allPlayers.filter(p => p.year === 1);
+    const y2 = allPlayers.filter(p => p.year === 2);
+    if (y1.length > 0) {
+      lines.push("    Year 1 (2014):");
+      y1.forEach(p => lines.push(`      ${p.name} - ${p.score}${p.flag ? " [" + (p.flag === "C" ? "HC" : "AC") + "]" : ""}`));
+    }
+    if (y2.length > 0) {
+      lines.push("    Year 2 (2013):");
+      y2.forEach(p => lines.push(`      ${p.name} - ${p.score}${p.flag ? " [" + (p.flag === "C" ? "HC" : "AC") + "]" : ""}`));
+    }
+  });
+
+  downloadFile("draft_history.txt", lines.join("\n"), "text/plain");
+}
+
+function exportDraftHistoryCSV() {
+  const header = "Event,Phase,Team,Player,Score,Flag,Timestamp";
+  const rows = [];
+  state.history.forEach(h => {
+    if (h.type === "pre-assign") {
+      const p = getPlayer(h.playerId);
+      const t = getTeam(h.teamId);
+      rows.push(`Pre-Assign,${h.phase},${csvEscape(t.name)},${csvEscape(p.name)},${p.score},${p.flag || ""},${h.timestamp || ""}`);
+    } else if (h.type === "trade") {
+      const tA = getTeam(h.teamAId);
+      const tB = getTeam(h.teamBId);
+      h.playersA.forEach(pid => {
+        const p = getPlayer(pid);
+        rows.push(`Trade Out,${h.phase},${csvEscape(tA.name)},${csvEscape(p.name)},${p.score},${p.flag || ""},${h.timestamp || ""}`);
+        rows.push(`Trade In,${h.phase},${csvEscape(tB.name)},${csvEscape(p.name)},${p.score},${p.flag || ""},${h.timestamp || ""}`);
+      });
+      h.playersB.forEach(pid => {
+        const p = getPlayer(pid);
+        rows.push(`Trade Out,${h.phase},${csvEscape(tB.name)},${csvEscape(p.name)},${p.score},${p.flag || ""},${h.timestamp || ""}`);
+        rows.push(`Trade In,${h.phase},${csvEscape(tA.name)},${csvEscape(p.name)},${p.score},${p.flag || ""},${h.timestamp || ""}`);
+      });
+    } else {
+      const p = getPlayer(h.playerId);
+      const t = getTeam(h.teamId);
+      rows.push(`Draft Pick,${h.phase},${csvEscape(t.name)},${csvEscape(p.name)},${p.score},${p.flag || ""},${h.timestamp || ""}`);
+    }
+  });
+  downloadFile("draft_history.csv", [header, ...rows].join("\n"), "text/csv");
+}
+
+function csvEscape(val) {
+  const s = String(val || "");
+  if (s.includes(",") || s.includes('"') || s.includes("\n")) {
+    return '"' + s.replace(/"/g, '""') + '"';
+  }
+  return s;
+}
+
+function downloadFile(filename, content, mimeType) {
+  const blob = new Blob([content], { type: mimeType });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = filename; a.click();
+  URL.revokeObjectURL(url);
+}
+
 // === SETUP LOGIC ===
 function initTeams(n) {
   state.numTeams = n;
@@ -407,6 +560,19 @@ function startDraft() {
   state.phase = "year1";
   state.pickNumber = 0;
   state.history = [];
+  state.draftStartTime = new Date().toISOString();
+
+  // Log pre-assignments as history entries
+  const startTime = new Date().toISOString();
+  state.teams.forEach(t => {
+    t.preAssigned.forEach(pid => {
+      const p = getPlayer(pid);
+      if (p && !p.isCoachOnly) {
+        state.history.push({ type: "pre-assign", teamId: t.id, playerId: pid, phase: "pre", timestamp: startTime });
+      }
+    });
+  });
+
   state.teams.forEach(t => t.drafted = []);
   state.showTransition = false;
   state.currentPickTeamId = getNextPickTeamId();
@@ -426,7 +592,7 @@ function draftPlayer(playerId) {
   const team = getTeam(teamId);
   team.drafted.push(playerId);
   state.pickNumber++;
-  state.history.push({ teamId, playerId, pickNumber: state.pickNumber, phase: state.phase });
+  state.history.push({ teamId, playerId, pickNumber: state.pickNumber, phase: state.phase, timestamp: new Date().toISOString() });
 
   // Check phase transition
   if (getAvailablePlayers().length === 0) {
@@ -595,7 +761,8 @@ function confirmTrade() {
     playersB: [...state.tradeSelectedB],
     phase: state.phase,
     pickNumber: state.pickNumber,
-    description: `Trade: ${teamA.name} sends ${aNames || "nothing"} to ${teamB.name} for ${bNames || "nothing"}`
+    description: `Trade: ${teamA.name} sends ${aNames || "nothing"} to ${teamB.name} for ${bNames || "nothing"}`,
+    timestamp: new Date().toISOString()
   });
 
   // Recalculate who picks next
@@ -839,6 +1006,11 @@ function renderDraft(app) {
       <h3>Draft Log</h3>
       <div class="draft-log">
         ${state.history.slice().reverse().map(h => {
+          if (h.type === "pre-assign") {
+            const p = getPlayer(h.playerId);
+            const t = getTeam(h.teamId);
+            return `<div class="log-entry" style="color:#1e40af;"><span class="round-label">PRE:</span> ${esc(t.name)} &larr; <strong>${esc(p.name)}</strong> (${p.score})</div>`;
+          }
           const phLbl = h.phase === "year1" ? "Y1" : "Y2";
           if (h.type === "trade") {
             return `<div class="log-entry" style="color:#7c3aed;"><span class="round-label">${phLbl}:</span> <strong>${esc(h.description)}</strong></div>`;
@@ -962,9 +1134,12 @@ function renderSummary(app) {
         </div>`;
       }).join("")}
     </div>
-    <div class="summary-actions">
-      <button class="btn-primary" onclick="window.print()">Print Summary</button>
-      <button class="btn-secondary" style="margin-left:10px;" onclick="resetDraft()">New Draft</button>
+    <div class="summary-actions" style="display:flex;flex-wrap:wrap;gap:10px;justify-content:center;">
+      <button class="btn-primary" onclick="exportSportsEngine()">Export for SportsEngine</button>
+      <button class="btn-secondary" onclick="exportDraftHistory()">Draft History (TXT)</button>
+      <button class="btn-secondary" onclick="exportDraftHistoryCSV()">Draft History (CSV)</button>
+      <button class="btn-secondary" onclick="window.print()">Print Summary</button>
+      <button class="btn-danger" onclick="resetDraft()">New Draft</button>
     </div>
   `;
   app.innerHTML = html;
