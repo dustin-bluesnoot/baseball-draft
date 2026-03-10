@@ -1144,7 +1144,10 @@ function renderSetup(app) {
             <tbody>
               ${PLAYERS.map(p => `
                 <tr>
-                  <td><input type="text" value="${esc(p.name)}" onchange="updatePlayer(${p.id},'name',this.value)" /></td>
+                  <td>${p.isCoachOnly
+                    ? '<span style="color:#cbd5e1;">-</span>'
+                    : `<input type="text" value="${esc(p.name)}" onchange="updatePlayer(${p.id},'name',this.value)" />`
+                  }</td>
                   <td><input type="text" value="${esc(p.dob || '')}" placeholder="M/D/YYYY" onchange="updatePlayer(${p.id},'dob',this.value)" style="width:100px;" /></td>
                   <td><select onchange="updatePlayer(${p.id},'year',this.value)">
                     <option value="" ${p.year === null ? "selected" : ""}>-</option>
@@ -1157,7 +1160,10 @@ function renderSetup(app) {
                     <option value="A" ${p.flag === "A" ? "selected" : ""}>A</option>
                     <option value="C" ${p.flag === "C" ? "selected" : ""}>C</option>
                   </select></td>
-                  <td>${p.flag ? `<input type="text" value="${esc(p.coachName || '')}" placeholder="Coach full name" onchange="updatePlayer(${p.id},'coachName',this.value)" style="width:140px;" />` : '<span style="color:#cbd5e1;">-</span>'}</td>
+                  <td>${p.isCoachOnly
+                    ? `<input type="text" value="${esc(p.name)}" placeholder="Coach full name" onchange="updatePlayer(${p.id},'name',this.value)" style="width:140px;" />`
+                    : (p.flag ? `<input type="text" value="${esc(p.coachName || '')}" placeholder="Coach full name" onchange="updatePlayer(${p.id},'coachName',this.value)" style="width:140px;" />` : '<span style="color:#cbd5e1;">-</span>')
+                  }</td>
                   <td style="text-align:center;"><input type="checkbox" ${p.isCoachOnly ? "checked" : ""} onchange="updatePlayer(${p.id},'isCoachOnly',this.checked)" /></td>
                   <td><button class="delete-btn" onclick="removePlayer(${p.id})" title="Remove">&times;</button></td>
                 </tr>
