@@ -41,6 +41,30 @@
   .validation-error { color: #dc2626; font-size: 0.9em; margin-bottom: 12px; padding: 10px; background: #fef2f2; border-radius: 6px; }
   .start-row { text-align: center; margin-top: 20px; }
 
+  /* Player Management */
+  .player-mgmt { margin-bottom: 24px; }
+  .player-mgmt h2 { margin-bottom: 4px; }
+  .player-mgmt-actions { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
+  .player-mgmt-table { width: 100%; border-collapse: collapse; font-size: 0.88em; }
+  .player-mgmt-table th { text-align: left; padding: 6px 8px; background: #f1f5f9; font-size: 0.82em; color: #475569; position: sticky; top: 0; }
+  .player-mgmt-table td { padding: 5px 8px; border-bottom: 1px solid #e2e8f0; }
+  .player-mgmt-table input, .player-mgmt-table select { padding: 4px 6px; font-size: 0.9em; width: 100%; }
+  .player-mgmt-table .name-col { min-width: 150px; }
+  .player-mgmt-table .narrow { width: 70px; }
+  .player-mgmt-table .action-col { width: 50px; text-align: center; }
+  .player-mgmt-scroll { max-height: 400px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 8px; }
+  .import-area { margin-top: 12px; }
+  .import-area textarea { width: 100%; height: 120px; font-family: monospace; font-size: 0.85em; border: 1px solid #cbd5e1; border-radius: 6px; padding: 8px; resize: vertical; }
+  .import-area .sample-btn { margin-top: 6px; }
+  .delete-btn { background: none; border: none; color: #dc2626; cursor: pointer; font-size: 1.1em; padding: 2px 6px; }
+  .delete-btn:hover { background: #fef2f2; border-radius: 4px; }
+  .tab-bar { display: flex; gap: 0; margin-bottom: 0; border-bottom: 2px solid #e2e8f0; }
+  .tab-bar button { background: none; border: none; padding: 10px 20px; font-size: 0.95em; font-weight: 600; color: #64748b; border-bottom: 2px solid transparent; margin-bottom: -2px; border-radius: 0; }
+  .tab-bar button:hover { color: #2563eb; }
+  .tab-bar button:active { transform: none; }
+  .tab-bar button.active { color: #2563eb; border-bottom-color: #2563eb; }
+  .tab-content { padding-top: 16px; }
+
   /* Draft Board */
   .on-the-clock { background: linear-gradient(135deg, #166534, #15803d); color: #fff; border-radius: 12px; padding: 24px 32px; text-align: center; margin-bottom: 20px; }
   .on-the-clock .team-name { font-size: 2.8em; font-weight: 800; letter-spacing: -0.02em; text-shadow: 0 2px 4px rgba(0,0,0,0.2); }
@@ -103,7 +127,7 @@
 <div id="app"></div>
 <script>
 // === PLAYER DATA ===
-const PLAYERS = [
+let PLAYERS = [
   { id: 1,  name: "Rocco Steen",          dob: "8/3/2014",    year: 1, score: 18,   flag: "A", isCoachOnly: false },
   { id: 2,  name: "Bowen Clarke",         dob: "6/24/2014",   year: 1, score: 15,   flag: "A", isCoachOnly: false },
   { id: 3,  name: "Liam Back",            dob: "5/8/2014",    year: 1, score: 14.5, flag: null, isCoachOnly: false },
@@ -132,9 +156,12 @@ const PLAYERS = [
   { id: 26, name: "Sam Whitney",          dob: "1/13/2014",   year: 1, score: 0,    flag: null, isCoachOnly: false },
 ];
 
+let nextPlayerId = PLAYERS.length > 0 ? Math.max(...PLAYERS.map(p => p.id)) + 1 : 1;
+
 // === STATE ===
 let state = {
   screen: "setup",       // "setup" | "draft" | "summary"
+  setupTab: "teams",     // "teams" | "players" | "import"
   numTeams: 4,
   teams: [],             // [{ id, name, coachName, preAssigned: [playerId], drafted: [playerId], coachChildrenScore }]
   draftOrder: [],         // team ids in pick order
@@ -169,6 +196,117 @@ function getAllTeamPlayers(team) {
 
 function calcCoachChildrenScore(team) {
   return team.preAssigned.reduce((sum, id) => sum + (getPlayer(id)?.score || 0), 0);
+}
+
+// === PLAYER MANAGEMENT ===
+function addPlayer() {
+  PLAYERS.push({ id: nextPlayerId++, name: "New Player", dob: "", year: 1, score: 0, flag: null, isCoachOnly: false });
+  render();
+}
+
+function removePlayer(id) {
+  if (!confirm("Remove this player?")) return;
+  PLAYERS = PLAYERS.filter(p => p.id !== id);
+  delete state.coachAssignments[id];
+  render();
+}
+
+function updatePlayer(id, field, value) {
+  const p = getPlayer(id);
+  if (!p) return;
+  if (field === "name") p.name = value;
+  else if (field === "dob") p.dob = value;
+  else if (field === "year") { p.year = value === "" ? null : Number(value); }
+  else if (field === "score") p.score = parseFloat(value) || 0;
+  else if (field === "flag") { p.flag = value || null; p.isCoachOnly = false; }
+  else if (field === "isCoachOnly") { p.isCoachOnly = value; if (value) { p.flag = p.flag || "C"; } }
+}
+
+function getCSVSample() {
+  return `Name,DOB,Year,Score,Flag,CoachOnly
+Rocco Steen,8/3/2014,1,18,A,No
+Bowen Clarke,6/24/2014,1,15,A,No
+Liam Back,5/8/2014,1,14.5,,No
+Max Schwabe,6/24/2014,1,14,C,No
+Sam Sarkissen,,,0,C,Yes
+Quinn Andersen,7/10/2014,1,0,,No`;
+}
+
+function exportCSV() {
+  const header = "Name,DOB,Year,Score,Flag,CoachOnly";
+  const rows = PLAYERS.map(p =>
+    `${p.name},${p.dob || ""},${p.year || ""},${p.score},${p.flag || ""},${p.isCoachOnly ? "Yes" : "No"}`
+  );
+  const csv = [header, ...rows].join("\n");
+  const blob = new Blob([csv], { type: "text/csv" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = "players.csv"; a.click();
+  URL.revokeObjectURL(url);
+}
+
+function importCSV(csvText) {
+  const lines = csvText.trim().split("\n").map(l => l.trim()).filter(l => l);
+  if (lines.length < 2) { alert("CSV must have a header row and at least one data row."); return; }
+  const header = lines[0].toLowerCase();
+  if (!header.includes("name")) { alert("CSV header must include 'Name' column."); return; }
+
+  const cols = lines[0].split(",").map(c => c.trim().toLowerCase());
+  const nameIdx = cols.indexOf("name");
+  const dobIdx = cols.indexOf("dob");
+  const yearIdx = cols.indexOf("year");
+  const scoreIdx = cols.indexOf("score");
+  const flagIdx = cols.indexOf("flag");
+  const coachIdx = cols.findIndex(c => c === "coachonly" || c === "coach only" || c === "coach_only");
+
+  const newPlayers = [];
+  for (let i = 1; i < lines.length; i++) {
+    const vals = parseCSVLine(lines[i]);
+    if (!vals[nameIdx]?.trim()) continue;
+    const yearVal = yearIdx >= 0 ? vals[yearIdx]?.trim() : "";
+    const flagVal = flagIdx >= 0 ? vals[flagIdx]?.trim() : "";
+    const coachVal = coachIdx >= 0 ? vals[coachIdx]?.trim().toLowerCase() : "";
+    const isCoach = coachVal === "yes" || coachVal === "true" || coachVal === "1";
+    newPlayers.push({
+      id: nextPlayerId++,
+      name: vals[nameIdx].trim(),
+      dob: dobIdx >= 0 ? vals[dobIdx]?.trim() || "" : "",
+      year: yearVal === "" ? null : Number(yearVal),
+      score: scoreIdx >= 0 ? parseFloat(vals[scoreIdx]) || 0 : 0,
+      flag: flagVal || null,
+      isCoachOnly: isCoach,
+    });
+  }
+  if (newPlayers.length === 0) { alert("No valid player rows found."); return; }
+  if (confirm(`Import ${newPlayers.length} players? This will REPLACE all current players.`)) {
+    PLAYERS = newPlayers;
+    state.coachAssignments = {};
+    render();
+  }
+}
+
+function parseCSVLine(line) {
+  const result = [];
+  let current = "";
+  let inQuotes = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (inQuotes) {
+      if (ch === '"' && line[i + 1] === '"') { current += '"'; i++; }
+      else if (ch === '"') { inQuotes = false; }
+      else { current += ch; }
+    } else {
+      if (ch === '"') { inQuotes = true; }
+      else if (ch === ',') { result.push(current); current = ""; }
+      else { current += ch; }
+    }
+  }
+  result.push(current);
+  return result;
+}
+
+function showSampleCSV() {
+  document.getElementById("importText").value = getCSVSample();
 }
 
 // === SETUP LOGIC ===
@@ -298,49 +436,127 @@ function render() {
 
 function renderSetup(app) {
   const flagPlayers = getCoachFlagPlayers();
+  const tab = state.setupTab;
+
+  let tabContent = "";
+
+  if (tab === "teams") {
+    tabContent = `
+      <div class="team-count-row">
+        <label><strong>Number of Teams:</strong></label>
+        <select id="numTeams" onchange="handleTeamCount(this.value)">
+          ${[2,3,4,5,6,7,8].map(n => `<option value="${n}" ${n === state.numTeams ? "selected" : ""}>${n}</option>`).join("")}
+        </select>
+      </div>
+      <div class="teams-grid">
+        ${state.teams.map(t => `
+          <div class="card team-card">
+            <label>Team Name</label>
+            <input type="text" value="${esc(t.name)}" onchange="handleTeamName(${t.id}, this.value)" />
+            <label>Coach Name</label>
+            <input type="text" value="${esc(t.coachName)}" placeholder="Optional" onchange="handleCoachName(${t.id}, this.value)" />
+          </div>
+        `).join("")}
+      </div>
+      ${flagPlayers.length > 0 ? `
+      <div class="card coach-assign-section">
+        <h2>Assign Coach & Assistant Children to Teams</h2>
+        <p class="subtitle">Each flagged player/coach must be assigned to exactly one team. Their scores determine draft order (lowest total picks first).</p>
+        <table class="coach-assign-table">
+          <thead><tr><th>Name</th><th>Type</th><th>Year</th><th>Score</th><th>Assign to Team</th></tr></thead>
+          <tbody>
+            ${flagPlayers.map(p => `
+              <tr>
+                <td>${esc(p.name)} ${p.isCoachOnly ? '<span class="coach-only-badge">Coach Only</span>' : ''}</td>
+                <td>${p.flag === "C" ? "Coach's Child" : "Asst. Child"}</td>
+                <td>${p.year ? "Year " + p.year + " (" + (p.year === 1 ? "2014" : "2013") + ")" : "N/A"}</td>
+                <td>${p.score}</td>
+                <td>
+                  <select onchange="handleAssign(${p.id}, this.value)">
+                    <option value="">-- Select --</option>
+                    ${state.teams.map(t => `<option value="${t.id}" ${state.coachAssignments[p.id] == t.id ? "selected" : ""}>${esc(t.name)}</option>`).join("")}
+                  </select>
+                </td>
+              </tr>
+            `).join("")}
+          </tbody>
+        </table>
+      </div>` : '<div class="card" style="text-align:center;color:#64748b;padding:20px;">No coach/assistant children flagged. You can flag players in the Players tab.</div>'}
+    `;
+  } else if (tab === "players") {
+    tabContent = `
+      <div class="player-mgmt card">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+          <h2 style="margin-bottom:0;">Player Roster (${PLAYERS.length})</h2>
+          <div class="player-mgmt-actions">
+            <button class="btn-primary btn-sm" onclick="addPlayer()">+ Add Player</button>
+            <button class="btn-secondary btn-sm" onclick="exportCSV()">Export CSV</button>
+          </div>
+        </div>
+        <div class="player-mgmt-scroll">
+          <table class="player-mgmt-table">
+            <thead><tr>
+              <th class="name-col">Name</th>
+              <th>DOB</th>
+              <th class="narrow">Year</th>
+              <th class="narrow">Score</th>
+              <th class="narrow">Flag</th>
+              <th class="narrow">Coach Only</th>
+              <th class="action-col"></th>
+            </tr></thead>
+            <tbody>
+              ${PLAYERS.map(p => `
+                <tr>
+                  <td><input type="text" value="${esc(p.name)}" onchange="updatePlayer(${p.id},'name',this.value)" /></td>
+                  <td><input type="text" value="${esc(p.dob || '')}" placeholder="M/D/YYYY" onchange="updatePlayer(${p.id},'dob',this.value)" style="width:100px;" /></td>
+                  <td><select onchange="updatePlayer(${p.id},'year',this.value)">
+                    <option value="" ${p.year === null ? "selected" : ""}>-</option>
+                    <option value="1" ${p.year === 1 ? "selected" : ""}>1</option>
+                    <option value="2" ${p.year === 2 ? "selected" : ""}>2</option>
+                  </select></td>
+                  <td><input type="number" step="0.5" value="${p.score}" onchange="updatePlayer(${p.id},'score',this.value)" style="width:60px;" /></td>
+                  <td><select onchange="updatePlayer(${p.id},'flag',this.value)">
+                    <option value="" ${!p.flag ? "selected" : ""}>-</option>
+                    <option value="A" ${p.flag === "A" ? "selected" : ""}>A</option>
+                    <option value="C" ${p.flag === "C" ? "selected" : ""}>C</option>
+                  </select></td>
+                  <td style="text-align:center;"><input type="checkbox" ${p.isCoachOnly ? "checked" : ""} onchange="updatePlayer(${p.id},'isCoachOnly',this.checked)" /></td>
+                  <td><button class="delete-btn" onclick="removePlayer(${p.id})" title="Remove">&times;</button></td>
+                </tr>
+              `).join("")}
+            </tbody>
+          </table>
+        </div>
+        <p style="margin-top:8px;font-size:0.82em;color:#94a3b8;">Year: 1 = 2014 birth year (drafted first), 2 = 2013 birth year. Flag: A = Assistant's child, C = Coach's child. Coach Only = not a draftable player.</p>
+      </div>
+    `;
+  } else if (tab === "import") {
+    tabContent = `
+      <div class="card import-area">
+        <h2>Import Players from CSV</h2>
+        <p class="subtitle">Paste CSV data below. This will <strong>replace</strong> all current players. Required column: Name. Optional: DOB, Year, Score, Flag, CoachOnly.</p>
+        <textarea id="importText" placeholder="Name,DOB,Year,Score,Flag,CoachOnly\nJohn Smith,3/15/2014,1,12,,No"></textarea>
+        <div style="display:flex;gap:8px;margin-top:8px;">
+          <button class="btn-primary btn-sm" onclick="importCSV(document.getElementById('importText').value)">Import</button>
+          <button class="btn-secondary btn-sm" onclick="showSampleCSV()">Load Sample CSV</button>
+          <button class="btn-secondary btn-sm" onclick="exportCSV()">Export Current Players</button>
+        </div>
+      </div>
+    `;
+  }
+
   let html = `
     <div class="setup-header">
       <h1>Youth Baseball Draft</h1>
-      <p class="subtitle">Configure teams and assign coach/assistant children before starting the draft</p>
+      <p class="subtitle">Configure teams, manage players, then start the draft</p>
     </div>
-    <div class="team-count-row">
-      <label><strong>Number of Teams:</strong></label>
-      <select id="numTeams" onchange="handleTeamCount(this.value)">
-        ${[2,3,4,5,6,7,8].map(n => `<option value="${n}" ${n === state.numTeams ? "selected" : ""}>${n}</option>`).join("")}
-      </select>
+    <div class="tab-bar">
+      <button class="${tab === 'teams' ? 'active' : ''}" onclick="state.setupTab='teams';render();">Teams & Assignments</button>
+      <button class="${tab === 'players' ? 'active' : ''}" onclick="state.setupTab='players';render();">Players (${PLAYERS.length})</button>
+      <button class="${tab === 'import' ? 'active' : ''}" onclick="state.setupTab='import';render();">Import / Export</button>
     </div>
-    <div class="teams-grid">
-      ${state.teams.map(t => `
-        <div class="card team-card">
-          <label>Team Name</label>
-          <input type="text" value="${esc(t.name)}" onchange="handleTeamName(${t.id}, this.value)" />
-          <label>Coach Name</label>
-          <input type="text" value="${esc(t.coachName)}" placeholder="Optional" onchange="handleCoachName(${t.id}, this.value)" />
-        </div>
-      `).join("")}
-    </div>
-    <div class="card coach-assign-section">
-      <h2>Assign Coach & Assistant Children to Teams</h2>
-      <p class="subtitle">Each flagged player/coach must be assigned to exactly one team. Their scores determine draft order (lowest total picks first).</p>
-      <table class="coach-assign-table">
-        <thead><tr><th>Name</th><th>Type</th><th>Year</th><th>Score</th><th>Assign to Team</th></tr></thead>
-        <tbody>
-          ${flagPlayers.map(p => `
-            <tr>
-              <td>${esc(p.name)} ${p.isCoachOnly ? '<span class="coach-only-badge">Coach Only</span>' : ''}</td>
-              <td>${p.flag === "C" ? "Coach's Child" : "Asst. Child"}</td>
-              <td>${p.year ? "Year " + p.year + " (" + (p.year === 1 ? "2014" : "2013") + ")" : "N/A"}</td>
-              <td>${p.score}</td>
-              <td>
-                <select onchange="handleAssign(${p.id}, this.value)">
-                  <option value="">-- Select --</option>
-                  ${state.teams.map(t => `<option value="${t.id}" ${state.coachAssignments[p.id] == t.id ? "selected" : ""}>${esc(t.name)}</option>`).join("")}
-                </select>
-              </td>
-            </tr>
-          `).join("")}
-        </tbody>
-      </table>
+    <div class="tab-content">
+      ${tabContent}
     </div>
     ${state.validationError ? `<div class="validation-error">${esc(state.validationError)}</div>` : ""}
     <div class="start-row">
