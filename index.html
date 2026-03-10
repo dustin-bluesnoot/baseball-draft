@@ -38,6 +38,12 @@
   .coach-assign-table td { padding: 8px 10px; border-bottom: 1px solid #e2e8f0; font-size: 0.9em; }
   .coach-assign-table select { width: 100%; }
   .coach-only-badge { background: #fef3c7; color: #92400e; font-size: 0.75em; padding: 2px 6px; border-radius: 4px; font-weight: 600; }
+  .asst-badge { background: #d1fae5; color: #065f46; font-size: 0.72em; padding: 2px 6px; border-radius: 4px; font-weight: 600; }
+  .head-coach-badge { background: #dbeafe; color: #1e40af; font-size: 0.72em; padding: 2px 6px; border-radius: 4px; font-weight: 600; }
+  .assign-group-label { font-size: 0.9em; font-weight: 700; color: #334155; padding: 10px 0 4px 0; }
+  .optional-note { font-size: 0.8em; color: #94a3b8; font-weight: 400; }
+  .player-table tr.asst-highlight { background: #ecfdf5; }
+  .player-table tr.asst-highlight:hover { background: #d1fae5; }
   .validation-error { color: #dc2626; font-size: 0.9em; margin-bottom: 12px; padding: 10px; background: #fef2f2; border-radius: 6px; }
   .start-row { text-align: center; margin-top: 20px; }
 
@@ -320,12 +326,12 @@ function initTeams(n) {
 }
 
 function startDraft() {
-  // Validate assignments
-  const flagPlayers = getCoachFlagPlayers();
-  for (const p of flagPlayers) {
+  // Validate assignments — only head coach children (C) are required
+  const headCoachPlayers = PLAYERS.filter(p => p.flag === "C");
+  for (const p of headCoachPlayers) {
     const assigned = state.coachAssignments[p.id];
     if (!assigned) {
-      state.validationError = `Please assign ${p.name} (${p.flag}) to a team.`;
+      state.validationError = `Please assign head coach's child ${p.name} to a team.`;
       render(); return;
     }
   }
@@ -458,17 +464,12 @@ function renderSetup(app) {
           </div>
         `).join("")}
       </div>
-      ${flagPlayers.length > 0 ? `
-      <div class="card coach-assign-section">
-        <h2>Assign Coach & Assistant Children to Teams</h2>
-        <p class="subtitle">Each flagged player/coach must be assigned to exactly one team. Their scores determine draft order (lowest total picks first).</p>
-        <table class="coach-assign-table">
-          <thead><tr><th>Name</th><th>Type</th><th>Year</th><th>Score</th><th>Assign to Team</th></tr></thead>
-          <tbody>
-            ${flagPlayers.map(p => `
+      ${flagPlayers.length > 0 ? (() => {
+        const headCoach = flagPlayers.filter(p => p.flag === "C");
+        const assistants = flagPlayers.filter(p => p.flag === "A");
+        const renderRow = (p) => `
               <tr>
                 <td>${esc(p.name)} ${p.isCoachOnly ? '<span class="coach-only-badge">Coach Only</span>' : ''}</td>
-                <td>${p.flag === "C" ? "Coach's Child" : "Asst. Child"}</td>
                 <td>${p.year ? "Year " + p.year + " (" + (p.year === 1 ? "2014" : "2013") + ")" : "N/A"}</td>
                 <td>${p.score}</td>
                 <td>
@@ -477,11 +478,25 @@ function renderSetup(app) {
                     ${state.teams.map(t => `<option value="${t.id}" ${state.coachAssignments[p.id] == t.id ? "selected" : ""}>${esc(t.name)}</option>`).join("")}
                   </select>
                 </td>
-              </tr>
-            `).join("")}
-          </tbody>
-        </table>
-      </div>` : '<div class="card" style="text-align:center;color:#64748b;padding:20px;">No coach/assistant children flagged. You can flag players in the Players tab.</div>'}
+              </tr>`;
+        return `
+      <div class="card coach-assign-section">
+        <h2>Assign to Teams</h2>
+        <p class="subtitle">Assigned players are pre-placed on rosters. Their scores determine draft order (lowest total picks first).</p>
+        ${headCoach.length > 0 ? `
+        <div class="assign-group-label"><span class="head-coach-badge">HC</span> Head Coach's Children <span style="color:#dc2626;">*required</span></div>
+        <table class="coach-assign-table">
+          <thead><tr><th>Name</th><th>Year</th><th>Score</th><th>Assign to Team</th></tr></thead>
+          <tbody>${headCoach.map(renderRow).join("")}</tbody>
+        </table>` : ''}
+        ${assistants.length > 0 ? `
+        <div class="assign-group-label"><span class="asst-badge">AC</span> Assistant Coach's Children <span class="optional-note">(optional &mdash; unassigned players enter the draft pool)</span></div>
+        <table class="coach-assign-table">
+          <thead><tr><th>Name</th><th>Year</th><th>Score</th><th>Assign to Team</th></tr></thead>
+          <tbody>${assistants.map(renderRow).join("")}</tbody>
+        </table>` : ''}
+      </div>`;
+      })() : '<div class="card" style="text-align:center;color:#64748b;padding:20px;">No coach/assistant children flagged. You can flag players in the Players tab.</div>'}
     `;
   } else if (tab === "players") {
     tabContent = `
@@ -601,9 +616,9 @@ function renderDraft(app) {
             <tbody>
               ${available.length === 0 ? '<tr><td colspan="4" style="text-align:center;color:#94a3b8;padding:20px;">No players available</td></tr>' :
                 available.map((p, i) => `
-                  <tr class="clickable ${p.score === 0 ? 'zero-score' : ''}" onclick="draftPlayer(${p.id})">
+                  <tr class="clickable ${p.score === 0 ? 'zero-score' : ''} ${p.flag === 'A' ? 'asst-highlight' : ''}" onclick="draftPlayer(${p.id})">
                     <td>${i + 1}</td>
-                    <td>${esc(p.name)}</td>
+                    <td>${esc(p.name)} ${p.flag === 'A' ? '<span class="asst-badge">Parent will assist</span>' : ''}</td>
                     <td>${p.dob || "N/A"}</td>
                     <td><strong>${p.score}</strong></td>
                   </tr>
@@ -628,7 +643,8 @@ function renderDraft(app) {
             <ul>
               ${t.preAssigned.filter(id => !getPlayer(id).isCoachOnly).map(id => {
                 const p = getPlayer(id);
-                return `<li>${esc(p.name)} <span class="pre-assigned-badge">PRE</span> <span class="score">${p.score}</span></li>`;
+                const badge = p.flag === "C" ? '<span class="head-coach-badge">HC</span>' : '<span class="asst-badge">AC</span>';
+                return `<li>${esc(p.name)} ${badge} <span class="score">${p.score}</span></li>`;
               }).join("")}
               ${t.preAssigned.filter(id => getPlayer(id).isCoachOnly).map(id => {
                 const p = getPlayer(id);
@@ -636,7 +652,7 @@ function renderDraft(app) {
               }).join("")}
               ${t.drafted.map(id => {
                 const p = getPlayer(id);
-                return `<li>${esc(p.name)} <span class="score">${p.score}</span></li>`;
+                return `<li>${esc(p.name)} ${p.flag === 'A' ? '<span class="asst-badge">AC</span>' : ''} <span class="score">${p.score}</span></li>`;
               }).join("")}
               ${players.length === 0 && t.preAssigned.filter(id => getPlayer(id).isCoachOnly).length === 0 ? '<li style="color:#cbd5e1;">No players yet</li>' : ''}
             </ul>
@@ -682,11 +698,17 @@ function renderSummary(app) {
           <div class="coach-info">${t.coachName ? 'Coach: ' + esc(t.coachName) + ' | ' : ''}Draft Position: #${idx + 1} (Coach Score: ${t.coachChildrenScore})</div>
           ${y1players.length > 0 ? `<div class="year-group">
             <h4>Year 1 &mdash; 2014 (${y1players.length})</h4>
-            <ul>${y1players.map(p => `<li><span>${esc(p.name)}${preSet.has(p.id) ? ' <span class="pre-assigned-badge">PRE</span>' : ''}</span><span class="score">${p.score}</span></li>`).join("")}</ul>
+            <ul>${y1players.map(p => {
+              const badge = p.flag === 'C' ? ' <span class="head-coach-badge">HC</span>' : p.flag === 'A' ? ' <span class="asst-badge">AC</span>' : '';
+              return `<li><span>${esc(p.name)}${badge}</span><span class="score">${p.score}</span></li>`;
+            }).join("")}</ul>
           </div>` : ''}
           ${y2players.length > 0 ? `<div class="year-group">
             <h4>Year 2 &mdash; 2013 (${y2players.length})</h4>
-            <ul>${y2players.map(p => `<li><span>${esc(p.name)}${preSet.has(p.id) ? ' <span class="pre-assigned-badge">PRE</span>' : ''}</span><span class="score">${p.score}</span></li>`).join("")}</ul>
+            <ul>${y2players.map(p => {
+              const badge = p.flag === 'C' ? ' <span class="head-coach-badge">HC</span>' : p.flag === 'A' ? ' <span class="asst-badge">AC</span>' : '';
+              return `<li><span>${esc(p.name)}${badge}</span><span class="score">${p.score}</span></li>`;
+            }).join("")}</ul>
           </div>` : ''}
           ${coachOnly.length > 0 ? `<div class="year-group"><h4>Coaches</h4><ul>${coachOnly.map(p => `<li style="color:#94a3b8;font-style:italic;">${esc(p.name)} <span class="coach-only-badge">Coach</span></li>`).join("")}</ul></div>` : ''}
           <div class="team-total"><span>Total Players: ${totalPlayers}</span><span>Total Score: ${totalScore}</span></div>
