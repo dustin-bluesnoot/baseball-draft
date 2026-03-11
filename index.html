@@ -167,6 +167,20 @@
   .zero-score-modal .zs-btn-no { background: #e2e8f0; color: #334155; }
   .zero-score-modal .zs-btn-no:hover { background: #cbd5e1; }
 
+  /* Tiebreaker spinner modal */
+  .spinner-overlay { background: rgba(0,0,0,0.6); position: fixed; inset: 0; z-index: 250; display: flex; align-items: center; justify-content: center; }
+  .spinner-modal { background: #fff; border-radius: 16px; padding: 32px; max-width: 420px; width: 92%; box-shadow: 0 20px 60px rgba(0,0,0,0.35); text-align: center; }
+  .spinner-modal h3 { margin-bottom: 6px; font-size: 1.2em; }
+  .spinner-modal .spinner-subtitle { color: #64748b; font-size: 0.88em; margin-bottom: 20px; }
+  .spinner-wheel { position: relative; width: 260px; height: 260px; margin: 0 auto 20px; }
+  .spinner-wheel canvas { width: 260px; height: 260px; }
+  .spinner-pointer { position: absolute; top: -12px; left: 50%; transform: translateX(-50%); width: 0; height: 0; border-left: 14px solid transparent; border-right: 14px solid transparent; border-top: 24px solid #dc2626; z-index: 2; filter: drop-shadow(0 2px 3px rgba(0,0,0,0.3)); }
+  .spinner-result { font-size: 1.3em; font-weight: 700; color: #2563eb; margin: 12px 0; min-height: 1.6em; }
+  .spinner-remaining { font-size: 0.82em; color: #94a3b8; margin-bottom: 12px; }
+  .spinner-btn { padding: 12px 36px; border-radius: 8px; font-size: 1em; font-weight: 600; cursor: pointer; border: none; background: #2563eb; color: #fff; }
+  .spinner-btn:hover { background: #1d4ed8; }
+  .spinner-btn:disabled { background: #94a3b8; cursor: not-allowed; }
+
   .trade-overlay { background: rgba(0,0,0,0.5); position: fixed; inset: 0; z-index: 100; display: flex; align-items: center; justify-content: center; }
   .trade-panel { background: #fff; border-radius: 12px; padding: 24px; max-width: 800px; width: 95%; max-height: 90vh; overflow-y: auto; box-shadow: 0 20px 60px rgba(0,0,0,0.3); }
   .trade-panel h2 { margin-bottom: 12px; text-align: center; }
@@ -299,19 +313,29 @@ function calcTotalTeamScore(team) {
 
 function getNextPickTeamId() {
   // Team with lowest total score picks next.
-  // Tiebreaker: if tied, the team that just picked goes to the back of the tied group.
+  // If only one team has the lowest score, return it directly.
+  // If tied, return null to trigger spinner.
+  const scores = state.draftOrder.map(id => ({ id, score: calcTotalTeamScore(getTeam(id)) }));
+  const minScore = Math.min(...scores.map(s => s.score));
+  const tied = scores.filter(s => s.score === minScore);
+  // Exclude the team that just picked from the tied group
   const lastPickTeamId = state.currentPickTeamId;
-  const sorted = [...state.draftOrder].sort((a, b) => {
-    const scoreA = calcTotalTeamScore(getTeam(a));
-    const scoreB = calcTotalTeamScore(getTeam(b));
-    if (scoreA !== scoreB) return scoreA - scoreB;
-    // Same score: team that just picked sorts last among tied teams
-    const aJustPicked = (a === lastPickTeamId) ? 1 : 0;
-    const bJustPicked = (b === lastPickTeamId) ? 1 : 0;
-    if (aJustPicked !== bJustPicked) return aJustPicked - bJustPicked;
-    return state.draftOrder.indexOf(a) - state.draftOrder.indexOf(b);
-  });
-  return sorted[0];
+  const tiedExcludingLast = tied.filter(s => s.id !== lastPickTeamId);
+  // If only one team is tied (or one remains after excluding last picker), no tie
+  if (tiedExcludingLast.length === 1) return tiedExcludingLast[0].id;
+  if (tied.length === 1) return tied[0].id;
+  // Multiple teams tied — return null to signal a tie
+  return null;
+}
+
+function getTiedTeamIds() {
+  const scores = state.draftOrder.map(id => ({ id, score: calcTotalTeamScore(getTeam(id)) }));
+  const minScore = Math.min(...scores.map(s => s.score));
+  const tied = scores.filter(s => s.score === minScore);
+  const lastPickTeamId = state.currentPickTeamId;
+  // Exclude the team that just picked
+  const tiedExcludingLast = tied.filter(s => s.id !== lastPickTeamId);
+  return tiedExcludingLast.length >= 2 ? tiedExcludingLast.map(s => s.id) : tied.map(s => s.id);
 }
 
 function getLastName(fullName) {
@@ -888,7 +912,19 @@ function startDraft() {
 
   state.teams.forEach(t => t.drafted = []);
   state.showTransition = false;
-  state.currentPickTeamId = getNextPickTeamId();
+  state.tiebreakerQueue = [];
+  state.spinner = null;
+
+  const firstPick = getNextPickTeamId();
+  if (firstPick === null) {
+    // Tie at draft start — show spinner
+    state.currentPickTeamId = null;
+    render();
+    const tiedIds = getTiedTeamIds();
+    showTiebreakerSpinner(tiedIds);
+    return;
+  }
+  state.currentPickTeamId = firstPick;
 
   // Check if year1 has any available players
   if (getAvailablePlayers().length === 0) {
@@ -901,7 +937,9 @@ function startDraft() {
 }
 
 function draftPlayer(playerId) {
+  if (state.spinner) return; // Don't allow picks during tiebreaker
   const teamId = state.currentPickTeamId;
+  if (!teamId) return;
   const team = getTeam(teamId);
   team.drafted.push(playerId);
   state.pickNumber++;
@@ -925,6 +963,13 @@ function draftPlayer(playerId) {
     }
   }
 
+  // Check if there's a queued tiebreaker order from a previous spin
+  if (state.tiebreakerQueue && state.tiebreakerQueue.length > 0) {
+    state.currentPickTeamId = state.tiebreakerQueue.shift();
+    render();
+    return;
+  }
+
   // Next pick goes to team with lowest total score
   const nextTeam = getNextPickTeamId();
   const player = getPlayer(playerId);
@@ -944,6 +989,13 @@ function draftPlayer(playerId) {
     }
   }
 
+  // Tie detected — show spinner
+  if (nextTeam === null) {
+    const tiedIds = getTiedTeamIds();
+    showTiebreakerSpinner(tiedIds);
+    return;
+  }
+
   state.currentPickTeamId = nextTeam;
   render();
 }
@@ -957,6 +1009,156 @@ function resolveZeroScoreModal(moveToNext) {
   }
   state.zeroScoreModal = null;
   render();
+}
+
+// === TIEBREAKER SPINNER ===
+
+function showTiebreakerSpinner(teamIds) {
+  state.spinner = {
+    allTiedIds: [...teamIds],
+    remainingIds: [...teamIds],
+    resolvedOrder: [],
+    spinning: false,
+    result: null,
+    angle: 0,
+  };
+  render();
+  setTimeout(() => drawSpinnerWheel(), 50);
+}
+
+function drawSpinnerWheel() {
+  const canvas = document.getElementById("spinnerCanvas");
+  if (!canvas) return;
+  const ctx = canvas.getContext("2d");
+  const ids = state.spinner.remainingIds;
+  const n = ids.length;
+  const cx = canvas.width / 2;
+  const cy = canvas.height / 2;
+  const r = Math.min(cx, cy) - 4;
+  const colors = ["#2563eb", "#dc2626", "#16a34a", "#f59e0b", "#9333ea", "#0891b2", "#be185d", "#4f46e5"];
+  const angleOffset = state.spinner.angle || 0;
+
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  const sliceAngle = (2 * Math.PI) / n;
+
+  for (let i = 0; i < n; i++) {
+    const start = angleOffset + i * sliceAngle;
+    const end = start + sliceAngle;
+    ctx.beginPath();
+    ctx.moveTo(cx, cy);
+    ctx.arc(cx, cy, r, start, end);
+    ctx.closePath();
+    ctx.fillStyle = colors[i % colors.length];
+    ctx.fill();
+    ctx.strokeStyle = "#fff";
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    // Draw team name
+    const midAngle = start + sliceAngle / 2;
+    const textR = r * 0.62;
+    const tx = cx + Math.cos(midAngle) * textR;
+    const ty = cy + Math.sin(midAngle) * textR;
+    ctx.save();
+    ctx.translate(tx, ty);
+    ctx.rotate(midAngle);
+    ctx.fillStyle = "#fff";
+    ctx.font = "bold 13px system-ui, sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    const team = getTeam(ids[i]);
+    ctx.fillText(team ? team.name : ids[i], 0, 0);
+    ctx.restore();
+  }
+
+  // Center circle
+  ctx.beginPath();
+  ctx.arc(cx, cy, 18, 0, 2 * Math.PI);
+  ctx.fillStyle = "#fff";
+  ctx.fill();
+  ctx.strokeStyle = "#e2e8f0";
+  ctx.lineWidth = 2;
+  ctx.stroke();
+}
+
+function spinTheWheel() {
+  if (!state.spinner || state.spinner.spinning) return;
+  state.spinner.spinning = true;
+  state.spinner.result = null;
+  render();
+  setTimeout(() => drawSpinnerWheel(), 20);
+
+  const ids = state.spinner.remainingIds;
+  const n = ids.length;
+  const sliceAngle = (2 * Math.PI) / n;
+
+  // Randomly pick a winner
+  const winnerIdx = Math.floor(Math.random() * n);
+
+  // Calculate target angle: pointer is at top (270deg = -PI/2)
+  // We want the winner's slice to be at the top
+  // Slice i center is at angle + i*sliceAngle + sliceAngle/2
+  // We want that to equal -PI/2 (top), so angle = -PI/2 - i*sliceAngle - sliceAngle/2
+  const targetSliceCenter = -Math.PI / 2 - winnerIdx * sliceAngle - sliceAngle / 2;
+  // Add several full rotations for visual effect
+  const fullRotations = (4 + Math.random() * 3) * 2 * Math.PI;
+  const startAngle = state.spinner.angle || 0;
+  const targetAngle = targetSliceCenter + fullRotations;
+
+  const duration = 3000;
+  const startTime = performance.now();
+
+  function animate(now) {
+    const elapsed = now - startTime;
+    const t = Math.min(elapsed / duration, 1);
+    // Ease-out cubic
+    const ease = 1 - Math.pow(1 - t, 3);
+    state.spinner.angle = startAngle + (targetAngle - startAngle) * ease;
+    drawSpinnerWheel();
+
+    if (t < 1) {
+      requestAnimationFrame(animate);
+    } else {
+      // Spin complete
+      state.spinner.spinning = false;
+      state.spinner.result = ids[winnerIdx];
+      const team = getTeam(ids[winnerIdx]);
+      const resultEl = document.getElementById("spinnerResult");
+      if (resultEl) resultEl.textContent = team ? team.name : "???";
+      const btnEl = document.getElementById("spinnerActionBtn");
+      if (btnEl) {
+        btnEl.disabled = false;
+        btnEl.textContent = state.spinner.remainingIds.length > 1 ? "Accept & Spin Next" : "Accept & Continue";
+      }
+    }
+  }
+  requestAnimationFrame(animate);
+}
+
+function acceptSpinResult() {
+  if (!state.spinner || !state.spinner.result) return;
+  const winnerId = state.spinner.result;
+  state.spinner.resolvedOrder.push(winnerId);
+  state.spinner.remainingIds = state.spinner.remainingIds.filter(id => id !== winnerId);
+  state.spinner.result = null;
+  state.spinner.angle = 0;
+
+  if (state.spinner.remainingIds.length <= 1) {
+    // Last one remaining gets added automatically
+    if (state.spinner.remainingIds.length === 1) {
+      state.spinner.resolvedOrder.push(state.spinner.remainingIds[0]);
+    }
+    // Apply resolved order: first team in resolved order picks next
+    state.currentPickTeamId = state.spinner.resolvedOrder[0];
+    // Store the full tiebreaker order for subsequent picks
+    state.tiebreakerQueue = state.spinner.resolvedOrder.slice(1);
+    state.spinner = null;
+    render();
+  } else {
+    // More teams to spin for
+    render();
+    setTimeout(() => drawSpinnerWheel(), 50);
+  }
 }
 
 // Get next teams in draft order excluding the team that just picked (for 0-score rotation prompt)
@@ -973,6 +1175,8 @@ function getSortedTeamsForPick(excludeTeamId) {
 
 function undoLastPick() {
   if (state.history.length === 0) return;
+  state.spinner = null;
+  state.tiebreakerQueue = [];
   const last = state.history.pop();
 
   if (last.type === "trade") {
@@ -989,8 +1193,15 @@ function undoLastPick() {
       teamA.drafted = teamA.drafted.filter(id => id !== pid);
       teamB.drafted.push(pid);
     });
-    state.currentPickTeamId = getNextPickTeamId();
-    render();
+    const nextAfterTradeUndo = getNextPickTeamId();
+    if (nextAfterTradeUndo === null) {
+      state.currentPickTeamId = null;
+      render();
+      showTiebreakerSpinner(getTiedTeamIds());
+    } else {
+      state.currentPickTeamId = nextAfterTradeUndo;
+      render();
+    }
     return;
   }
 
@@ -1121,9 +1332,17 @@ function confirmTrade() {
   });
 
   // Recalculate who picks next
-  state.currentPickTeamId = getNextPickTeamId();
+  state.tiebreakerQueue = [];
+  const nextAfterTrade = getNextPickTeamId();
   state.tradeOpen = false;
-  render();
+  if (nextAfterTrade === null) {
+    state.currentPickTeamId = null;
+    render();
+    showTiebreakerSpinner(getTiedTeamIds());
+  } else {
+    state.currentPickTeamId = nextAfterTrade;
+    render();
+  }
 }
 
 // === RENDER ===
@@ -1378,10 +1597,10 @@ function renderSetup(app) {
 
 function renderDraft(app) {
   const currentTeamId = state.currentPickTeamId;
-  const currentTeam = getTeam(currentTeamId);
+  const currentTeam = currentTeamId ? getTeam(currentTeamId) : null;
   const available = getAvailablePlayers();
   const phaseLabel = state.phase === "year1" ? "Year 1 (2014)" : "Year 2 (2013)";
-  const currentTeamScore = calcTotalTeamScore(currentTeam);
+  const currentTeamScore = currentTeam ? calcTotalTeamScore(currentTeam) : 0;
 
   let html = "";
 
@@ -1396,8 +1615,8 @@ function renderDraft(app) {
   html += `
     <div class="on-the-clock">
       <div class="phase-badge">${phaseLabel} &mdash; Pick #${state.pickNumber + 1}</div>
-      <div class="team-name">${esc(currentTeam.name)}</div>
-      <div class="pick-info">Team Score: ${currentTeamScore} (lowest score picks next)</div>
+      <div class="team-name">${currentTeam ? esc(currentTeam.name) : 'Tiebreaker in progress...'}</div>
+      <div class="pick-info">${currentTeam ? `Team Score: ${currentTeamScore} (lowest score picks next)` : 'Spin the wheel to determine pick order'}</div>
     </div>
     <div class="draft-actions">
       <button class="btn-secondary btn-sm" onclick="undoLastPick()" ${state.history.length === 0 ? "disabled" : ""}>Undo Last Pick</button>
@@ -1551,6 +1770,37 @@ function renderDraft(app) {
           <button class="btn-primary" onclick="confirmTrade()" ${!canConfirm ? "disabled" : ""}>Confirm Trade</button>
           <button class="btn-secondary" onclick="closeTrade()">Cancel</button>
         </div>
+      </div>
+    </div>`;
+  }
+
+  // Tiebreaker spinner modal
+  if (state.spinner) {
+    const sp = state.spinner;
+    const resolved = sp.resolvedOrder.map((id, i) => {
+      const t = getTeam(id);
+      return `<div style="font-size:0.88em;padding:3px 0;"><strong>${i + 1}.</strong> ${esc(t.name)}</div>`;
+    }).join("");
+    const minScore = Math.min(...state.draftOrder.map(id => calcTotalTeamScore(getTeam(id))));
+
+    html += `<div class="spinner-overlay">
+      <div class="spinner-modal">
+        <h3>Tiebreaker!</h3>
+        <div class="spinner-subtitle">${sp.allTiedIds.length} teams tied at ${minScore} points</div>
+        ${resolved ? `<div style="margin-bottom:12px;text-align:left;background:#f0fdf4;border-radius:8px;padding:8px 14px;">
+          <div style="font-size:0.75em;color:#16a34a;font-weight:600;margin-bottom:2px;">PICK ORDER</div>
+          ${resolved}
+        </div>` : ''}
+        <div class="spinner-wheel">
+          <div class="spinner-pointer"></div>
+          <canvas id="spinnerCanvas" width="260" height="260"></canvas>
+        </div>
+        <div class="spinner-result" id="spinnerResult">${sp.result ? esc(getTeam(sp.result).name) : (sp.spinning ? 'Spinning...' : '')}</div>
+        <div class="spinner-remaining">${sp.remainingIds.length} team${sp.remainingIds.length !== 1 ? 's' : ''} remaining</div>
+        ${!sp.spinning && !sp.result
+          ? `<button class="spinner-btn" onclick="spinTheWheel()">Spin!</button>`
+          : `<button class="spinner-btn" id="spinnerActionBtn" onclick="acceptSpinResult()" ${!sp.result ? 'disabled' : ''}>${sp.remainingIds.length > 1 ? 'Accept & Spin Next' : 'Accept & Continue'}</button>`
+        }
       </div>
     </div>`;
   }
@@ -1807,8 +2057,16 @@ function handleAssign(playerId, teamId) {
 
 function dismissTransition() {
   state.showTransition = false;
-  state.currentPickTeamId = getNextPickTeamId();
-  render();
+  state.tiebreakerQueue = [];
+  const next = getNextPickTeamId();
+  if (next === null) {
+    state.currentPickTeamId = null;
+    render();
+    showTiebreakerSpinner(getTiedTeamIds());
+  } else {
+    state.currentPickTeamId = next;
+    render();
+  }
 }
 
 // === INIT ===
