@@ -1182,10 +1182,10 @@ function startNewDraft() {
   const saved = hasSavedDraft();
   if (saved && !confirm("You have a draft in progress. Starting a new one will discard it. Continue?")) return;
   clearDraftState();
-  PLAYERS = JSON.parse(JSON.stringify(DEFAULT_PLAYERS));
-  nextPlayerId = PLAYERS.length > 0 ? Math.max(...PLAYERS.map(p => p.id)) + 1 : 1;
+  PLAYERS = [];
+  nextPlayerId = 1;
   state.screen = "setup";
-  state.setupTab = "teams";
+  state.setupTab = "import";
   state.numTeams = 4;
   state.season = new Date().getFullYear().toString();
   state.division = "";
@@ -1334,10 +1334,12 @@ function renderSetup(app) {
       </div>
     `;
   } else if (tab === "import") {
+    const noPlayers = PLAYERS.length === 0;
     tabContent = `
       <div class="card import-area">
-        <h2>Import Players</h2>
-        <p class="subtitle">Paste player data below (CSV or tab-separated from a spreadsheet). This will <strong>replace</strong> all current players.</p>
+        <h2>Import Players & Coaches</h2>
+        ${noPlayers ? '<div style="background:#fef3c7;border:1px solid #fbbf24;border-radius:8px;padding:12px 16px;margin-bottom:12px;font-size:0.92em;"><strong>No players loaded.</strong> Paste your evaluation spreadsheet below or add players manually on the Players tab.</div>' : ''}
+        <p class="subtitle">Paste player data below (CSV or tab-separated from a spreadsheet).${noPlayers ? '' : ' This will <strong>replace</strong> all current players.'}</p>
         <p class="subtitle" style="font-size:0.8em;color:#64748b;margin-top:4px;">
           <strong>CSV:</strong> Name, DOB, Year, Score, Flag, CoachOnly &nbsp;|&nbsp;
           <strong>Tab/Spreadsheet:</strong> First, Last, DOB, Year, Pitching, Hitting, Fielding, 2B Time, Total, Coach or Asst. (C/A)
