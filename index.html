@@ -84,6 +84,9 @@
   .player-table tr.clickable { cursor: pointer; transition: background 0.1s; }
   .player-table tr.clickable:hover { background: #dbeafe; }
   .player-table tr.zero-score td { color: #94a3b8; font-style: italic; }
+  .player-table tr.other-year td { color: #b0b8c4; }
+  .player-table tr.other-year:hover { background: #f1f5f9; }
+  .player-table .year-separator td { background: #e2e8f0; padding: 4px 10px; font-size: 0.8em; font-weight: 700; color: #475569; text-transform: uppercase; letter-spacing: 0.05em; }
   .available-scroll { max-height: 450px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 8px; }
   .rosters-panel { display: flex; flex-direction: column; gap: 12px; }
   .roster-card { border: 2px solid #e2e8f0; border-radius: 8px; padding: 12px; }
@@ -180,6 +183,23 @@
   .spinner-btn { padding: 12px 36px; border-radius: 8px; font-size: 1em; font-weight: 600; cursor: pointer; border: none; background: #2563eb; color: #fff; }
   .spinner-btn:hover { background: #1d4ed8; }
   .spinner-btn:disabled { background: #94a3b8; cursor: not-allowed; }
+
+  /* Player edit modal */
+  .edit-player-overlay { background: rgba(0,0,0,0.5); position: fixed; inset: 0; z-index: 200; display: flex; align-items: center; justify-content: center; }
+  .edit-player-modal { background: #fff; border-radius: 12px; padding: 28px; max-width: 500px; width: 92%; box-shadow: 0 20px 60px rgba(0,0,0,0.3); }
+  .edit-player-modal h3 { margin-bottom: 16px; text-align: center; }
+  .edit-player-modal .edit-grid { display: grid; grid-template-columns: auto 1fr; gap: 8px 12px; align-items: center; margin-bottom: 16px; }
+  .edit-player-modal .edit-grid label { font-size: 0.88em; font-weight: 600; color: #475569; text-align: right; }
+  .edit-player-modal .edit-grid input, .edit-player-modal .edit-grid select { padding: 6px 10px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.9em; }
+  .edit-player-modal .edit-grid input[type="number"] { width: 80px; }
+  .edit-player-modal .impact-box { background: #fef3c7; border: 1px solid #fbbf24; border-radius: 8px; padding: 12px; margin-bottom: 16px; font-size: 0.88em; }
+  .edit-player-modal .impact-box h4 { margin: 0 0 6px; font-size: 0.9em; color: #92400e; }
+  .edit-player-modal .edit-note { margin-bottom: 12px; }
+  .edit-player-modal .edit-note textarea { width: 100%; height: 50px; border: 1px solid #cbd5e1; border-radius: 6px; padding: 8px; font-size: 0.85em; resize: vertical; }
+  .edit-player-modal .edit-buttons { display: flex; gap: 10px; justify-content: center; }
+  .edit-player-modal .edit-buttons button { padding: 10px 24px; border-radius: 8px; font-size: 0.95em; font-weight: 600; cursor: pointer; border: none; }
+  .edit-btn-inline { background: none; border: none; color: #64748b; cursor: pointer; font-size: 0.85em; padding: 2px 6px; border-radius: 4px; }
+  .edit-btn-inline:hover { background: #e2e8f0; color: #2563eb; }
 
   .trade-overlay { background: rgba(0,0,0,0.5); position: fixed; inset: 0; z-index: 100; display: flex; align-items: center; justify-content: center; }
   .trade-panel { background: #fff; border-radius: 12px; padding: 24px; max-width: 800px; width: 95%; max-height: 90vh; overflow-y: auto; box-shadow: 0 20px 60px rgba(0,0,0,0.3); }
@@ -291,8 +311,24 @@ function getAvailablePlayers() {
     t.preAssigned.forEach(id => taken.add(id));
     t.drafted.forEach(id => taken.add(id));
   });
-  return PLAYERS.filter(p => p.year === yearFilter && !p.isCoachOnly && !taken.has(p.id))
-    .sort((a, b) => b.score - a.score || a.name.localeCompare(b.name));
+  return PLAYERS.filter(p => !p.isCoachOnly && !taken.has(p.id))
+    .sort((a, b) => {
+      // Current year first, then other year
+      const aCurrentYear = (a.year === yearFilter) ? 0 : 1;
+      const bCurrentYear = (b.year === yearFilter) ? 0 : 1;
+      if (aCurrentYear !== bCurrentYear) return aCurrentYear - bCurrentYear;
+      return b.score - a.score || a.name.localeCompare(b.name);
+    });
+}
+
+function getCurrentYearAvailableCount() {
+  const yearFilter = state.phase === "year1" ? 1 : 2;
+  const taken = new Set();
+  state.teams.forEach(t => {
+    t.preAssigned.forEach(id => taken.add(id));
+    t.drafted.forEach(id => taken.add(id));
+  });
+  return PLAYERS.filter(p => p.year === yearFilter && !p.isCoachOnly && !taken.has(p.id)).length;
 }
 
 function getAllTeamPlayers(team) {
@@ -927,9 +963,9 @@ function startDraft() {
   state.currentPickTeamId = firstPick;
 
   // Check if year1 has any available players
-  if (getAvailablePlayers().length === 0) {
+  if (getCurrentYearAvailableCount() === 0) {
     state.phase = "year2";
-    if (getAvailablePlayers().length === 0) {
+    if (getCurrentYearAvailableCount() === 0) {
       state.screen = "summary";
     }
   }
@@ -945,13 +981,13 @@ function draftPlayer(playerId) {
   state.pickNumber++;
   state.history.push({ teamId, playerId, pickNumber: state.pickNumber, phase: state.phase, timestamp: new Date().toISOString() });
 
-  // Check phase transition
-  if (getAvailablePlayers().length === 0) {
+  // Check phase transition (based on current year only)
+  if (getCurrentYearAvailableCount() === 0) {
     if (state.phase === "year1") {
       state.phase = "year2";
       state.pickNumber = 0;
       state.showTransition = true;
-      if (getAvailablePlayers().length === 0) {
+      if (getCurrentYearAvailableCount() === 0) {
         state.screen = "summary";
         render();
         return;
@@ -1009,6 +1045,141 @@ function resolveZeroScoreModal(moveToNext) {
   }
   state.zeroScoreModal = null;
   render();
+}
+
+// === LIVE PLAYER EDITING ===
+
+function openEditPlayer(playerId, evt) {
+  if (evt) evt.stopPropagation();
+  const p = getPlayer(playerId);
+  if (!p) return;
+  state.editPlayer = {
+    id: playerId,
+    name: p.name,
+    score: p.score,
+    pitching: p.pitching || 0,
+    hitting: p.hitting || 0,
+    fielding: p.fielding || 0,
+    time2b: p.time2b || 0,
+    note: "",
+  };
+  render();
+}
+
+function closeEditPlayer() {
+  state.editPlayer = null;
+  render();
+}
+
+function getEditPlayerImpact() {
+  if (!state.editPlayer) return null;
+  const p = getPlayer(state.editPlayer.id);
+  if (!p) return null;
+  const oldScore = p.score;
+  const newScore = parseFloat(state.editPlayer.score) || 0;
+  const scoreDiff = newScore - oldScore;
+  if (scoreDiff === 0) return null;
+
+  // Find if this player is already drafted
+  let draftedByTeam = null;
+  for (const t of state.teams) {
+    if (t.drafted.includes(state.editPlayer.id) || t.preAssigned.includes(state.editPlayer.id)) {
+      draftedByTeam = t;
+      break;
+    }
+  }
+  if (!draftedByTeam) return null;
+
+  // Calculate impact on team scores and pick order
+  const currentTeamScore = calcTotalTeamScore(draftedByTeam);
+  const newTeamScore = currentTeamScore + scoreDiff;
+  const impacts = [];
+  impacts.push(`${draftedByTeam.name}'s score: ${currentTeamScore} → ${newTeamScore} (${scoreDiff > 0 ? "+" : ""}${scoreDiff})`);
+
+  // Check if pick order would change
+  const otherScores = state.teams.filter(t => t.id !== draftedByTeam.id).map(t => ({
+    name: t.name,
+    score: calcTotalTeamScore(t)
+  }));
+  const currentRank = otherScores.filter(t => t.score < currentTeamScore).length + 1;
+  const newRank = otherScores.filter(t => t.score < newTeamScore).length + 1;
+  if (currentRank !== newRank) {
+    impacts.push(`Draft position changes from #${currentRank} to #${newRank}`);
+  }
+
+  return { team: draftedByTeam.name, impacts, scoreDiff };
+}
+
+function confirmEditPlayer() {
+  if (!state.editPlayer) return;
+  const p = getPlayer(state.editPlayer.id);
+  if (!p) return;
+
+  const oldScore = p.score;
+  const newScore = parseFloat(state.editPlayer.score) || 0;
+
+  // Apply changes
+  p.name = state.editPlayer.name;
+  p.score = newScore;
+  p.pitching = parseFloat(state.editPlayer.pitching) || 0;
+  p.hitting = parseFloat(state.editPlayer.hitting) || 0;
+  p.fielding = parseFloat(state.editPlayer.fielding) || 0;
+  p.time2b = parseFloat(state.editPlayer.time2b) || 0;
+
+  // Add note to draft history if provided
+  const note = state.editPlayer.note.trim();
+  if (note || oldScore !== newScore) {
+    if (!state.draftNotes) state.draftNotes = [];
+    state.draftNotes.push({
+      timestamp: new Date().toISOString(),
+      playerName: p.name,
+      change: oldScore !== newScore ? `Score: ${oldScore} → ${newScore}` : "Stats updated",
+      note: note,
+      pickNumber: state.pickNumber,
+    });
+    state.history.push({
+      type: "edit",
+      playerId: p.id,
+      playerName: p.name,
+      oldScore,
+      newScore,
+      note,
+      phase: state.phase,
+      pickNumber: state.pickNumber,
+      timestamp: new Date().toISOString(),
+      description: `Edit: ${p.name} score ${oldScore} → ${newScore}${note ? " (" + note + ")" : ""}`,
+    });
+  }
+
+  state.editPlayer = null;
+  render();
+}
+
+function updateEditField(field, value) {
+  if (!state.editPlayer) return;
+  state.editPlayer[field] = value;
+  // Auto-recalculate total from sub-scores if they're all set
+  if (["pitching", "hitting", "fielding"].includes(field)) {
+    const p = parseFloat(state.editPlayer.pitching) || 0;
+    const h = parseFloat(state.editPlayer.hitting) || 0;
+    const f = parseFloat(state.editPlayer.fielding) || 0;
+    if (p > 0 || h > 0 || f > 0) {
+      state.editPlayer.score = p + h + f;
+      const scoreInput = document.getElementById("editPlayerScore");
+      if (scoreInput) scoreInput.value = state.editPlayer.score;
+    }
+  }
+  // Re-render impact preview
+  const impactEl = document.getElementById("editImpactBox");
+  if (impactEl) {
+    const impact = getEditPlayerImpact();
+    if (impact) {
+      impactEl.innerHTML = `<h4>Impact on Draft</h4>${impact.impacts.map(i => `<div>${i}</div>`).join("")}`;
+      impactEl.style.display = "block";
+    } else {
+      impactEl.style.display = "none";
+    }
+  }
 }
 
 // === TIEBREAKER SPINNER ===
@@ -1348,6 +1519,21 @@ function confirmTrade() {
 // === RENDER ===
 function render() {
   const app = document.getElementById("app");
+
+  // Spectator mode renders a read-only view
+  if (isSpectator) {
+    if (state.screen === "draft") renderSpectatorDraft(app);
+    else if (state.screen === "summary") renderSummary(app);
+    else {
+      app.innerHTML = `<div style="text-align:center;padding:60px 20px;">
+        <h2>Waiting for Draft</h2>
+        <p style="color:#64748b;">Spectating draft <strong>${esc(spectatorDraftId)}</strong>. The draft hasn't started yet or has ended.</p>
+        <p style="color:#94a3b8;font-size:0.85em;">This page updates automatically when the host makes changes.</p>
+      </div>`;
+    }
+    return;
+  }
+
   if (state.screen === "home") renderHome(app);
   else if (state.screen === "setup") renderSetup(app);
   else if (state.screen === "draft") renderDraft(app);
@@ -1359,6 +1545,11 @@ function render() {
   // Auto-save in-progress drafts
   if (state.screen === "setup" || state.screen === "draft" || state.screen === "summary") {
     saveDraftState();
+  }
+
+  // Broadcast to spectators
+  if (state.liveDraftId && (state.screen === "draft" || state.screen === "summary")) {
+    broadcastDraftState();
   }
 }
 
@@ -1621,28 +1812,47 @@ function renderDraft(app) {
     <div class="draft-actions">
       <button class="btn-secondary btn-sm" onclick="undoLastPick()" ${state.history.length === 0 ? "disabled" : ""}>Undo Last Pick</button>
       <button class="btn-trade btn-sm" onclick="openTrade()">Propose Trade</button>
+      <button class="btn-secondary btn-sm" onclick="startLiveDraft()" style="background:#16a34a;color:#fff;border-color:#16a34a;">${state.liveDraftId ? 'Copy Live Link (' + state.liveDraftId + ')' : 'Share Live Link'}</button>
       <button class="btn-danger btn-sm" onclick="resetDraft()">Reset Draft</button>
     </div>
     <div class="draft-layout">
       <div class="available-panel card">
-        <h2>Available Players &mdash; ${phaseLabel}</h2>
+        <h2>Available Players</h2>
         <div class="available-scroll">
           <table class="player-table">
-            <thead><tr><th>#</th><th>Player</th><th>DOB</th><th>P</th><th>Hit</th><th>Fld</th><th>2B</th><th>Total</th></tr></thead>
+            <thead><tr><th>#</th><th>Player</th><th>Yr</th><th>DOB</th><th>P</th><th>Hit</th><th>Fld</th><th>2B</th><th>Total</th><th></th></tr></thead>
             <tbody>
-              ${available.length === 0 ? '<tr><td colspan="8" style="text-align:center;color:#94a3b8;padding:20px;">No players available</td></tr>' :
-                available.map((p, i) => `
-                  <tr class="clickable ${p.score === 0 ? 'zero-score' : ''} ${p.flag === 'A' ? 'asst-highlight' : ''}" onclick="draftPlayer(${p.id})">
-                    <td>${i + 1}</td>
-                    <td>${esc(p.name)} ${p.flag === 'A' ? '<span class="asst-badge">Parent will assist</span>' : ''}</td>
-                    <td>${p.dob || "N/A"}</td>
-                    <td>${p.pitching || "-"}</td>
-                    <td>${p.hitting || "-"}</td>
-                    <td>${p.fielding || "-"}</td>
-                    <td>${p.time2b || "-"}</td>
-                    <td><strong>${p.score}</strong></td>
-                  </tr>
-                `).join("")}
+              ${available.length === 0 ? '<tr><td colspan="10" style="text-align:center;color:#94a3b8;padding:20px;">No players available</td></tr>' :
+                (() => {
+                  const yearFilter = state.phase === "year1" ? 1 : 2;
+                  const otherYearLabel = state.phase === "year1" ? "Year 2 (2013)" : "Year 1 (2014)";
+                  let rows = "";
+                  let shownSeparator = false;
+                  let currentIdx = 0;
+                  available.forEach(p => {
+                    const isOtherYear = p.year !== yearFilter;
+                    if (isOtherYear && !shownSeparator) {
+                      rows += `<tr class="year-separator"><td colspan="9">${otherYearLabel} Players</td></tr>`;
+                      shownSeparator = true;
+                      currentIdx = 0;
+                    }
+                    currentIdx++;
+                    const cls = `clickable ${p.score === 0 ? 'zero-score' : ''} ${p.flag === 'A' ? 'asst-highlight' : ''} ${isOtherYear ? 'other-year' : ''}`;
+                    rows += `<tr class="${cls}" onclick="draftPlayer(${p.id})">
+                      <td>${currentIdx}</td>
+                      <td>${esc(p.name)} ${p.flag === 'A' ? '<span class="asst-badge">Parent will assist</span>' : ''}</td>
+                      <td>${p.year || "-"}</td>
+                      <td>${p.dob || "N/A"}</td>
+                      <td>${p.pitching || "-"}</td>
+                      <td>${p.hitting || "-"}</td>
+                      <td>${p.fielding || "-"}</td>
+                      <td>${p.time2b || "-"}</td>
+                      <td><strong>${p.score}</strong></td>
+                      <td><button class="edit-btn-inline" onclick="openEditPlayer(${p.id}, event)" title="Edit">&#9998;</button></td>
+                    </tr>`;
+                  });
+                  return rows;
+                })()}
             </tbody>
           </table>
         </div>
@@ -1696,6 +1906,9 @@ function renderDraft(app) {
           const phLbl = h.phase === "year1" ? "Y1" : "Y2";
           if (h.type === "trade") {
             return `<div class="log-entry" style="color:#7c3aed;"><span class="round-label">${phLbl}:</span> <strong>${esc(h.description)}</strong></div>`;
+          }
+          if (h.type === "edit") {
+            return `<div class="log-entry" style="color:#d97706;"><span class="round-label">EDIT:</span> <strong>${esc(h.description)}</strong></div>`;
           }
           const p = getPlayer(h.playerId);
           const t = getTeam(h.teamId);
@@ -1805,6 +2018,43 @@ function renderDraft(app) {
     </div>`;
   }
 
+  // Edit player modal
+  if (state.editPlayer) {
+    const ep = state.editPlayer;
+    const player = getPlayer(ep.id);
+    const impact = getEditPlayerImpact();
+    html += `<div class="edit-player-overlay" onclick="if(event.target===this)closeEditPlayer()">
+      <div class="edit-player-modal">
+        <h3>Edit Player</h3>
+        <div class="edit-grid">
+          <label>Name</label>
+          <input type="text" value="${esc(ep.name)}" onchange="state.editPlayer.name=this.value" />
+          <label>Pitching</label>
+          <input type="number" step="0.5" value="${ep.pitching}" onchange="updateEditField('pitching',this.value)" />
+          <label>Hitting</label>
+          <input type="number" step="0.5" value="${ep.hitting}" onchange="updateEditField('hitting',this.value)" />
+          <label>Fielding</label>
+          <input type="number" step="0.5" value="${ep.fielding}" onchange="updateEditField('fielding',this.value)" />
+          <label>2B Time</label>
+          <input type="number" step="0.01" value="${ep.time2b}" onchange="updateEditField('time2b',this.value)" />
+          <label>Total Score</label>
+          <input type="number" step="0.5" id="editPlayerScore" value="${ep.score}" onchange="updateEditField('score',this.value)" />
+        </div>
+        <div class="impact-box" id="editImpactBox" style="${impact ? '' : 'display:none;'}">
+          ${impact ? `<h4>Impact on Draft</h4>${impact.impacts.map(i => `<div>${i}</div>`).join("")}` : ''}
+        </div>
+        <div class="edit-note">
+          <label style="font-size:0.85em;font-weight:600;color:#475569;">Note (shown in draft summary)</label>
+          <textarea placeholder="Reason for edit..." onchange="state.editPlayer.note=this.value">${esc(ep.note)}</textarea>
+        </div>
+        <div class="edit-buttons">
+          <button style="background:#2563eb;color:#fff;" onclick="confirmEditPlayer()">Save Changes</button>
+          <button style="background:#e2e8f0;color:#334155;" onclick="closeEditPlayer()">Cancel</button>
+        </div>
+      </div>
+    </div>`;
+  }
+
   // Zero-score rotation modal
   if (state.zeroScoreModal) {
     const m = state.zeroScoreModal;
@@ -1886,6 +2136,15 @@ function renderSummary(app) {
         </div>`;
       }).join("")}
     </div>
+    ${state.draftNotes && state.draftNotes.length > 0 ? `
+    <div class="card" style="margin-bottom:20px;">
+      <h3>Draft Notes & Edits</h3>
+      <ul style="list-style:none;font-size:0.9em;">
+        ${state.draftNotes.map(n => `<li style="padding:4px 0;border-bottom:1px solid #f1f5f9;">
+          <strong>${esc(n.playerName)}</strong> &mdash; ${esc(n.change)}${n.note ? ` <em style="color:#64748b;">(${esc(n.note)})</em>` : ''}
+        </li>`).join("")}
+      </ul>
+    </div>` : ''}
     <div class="summary-actions" style="display:flex;flex-wrap:wrap;gap:10px;justify-content:center;">
       <button class="btn-primary" onclick="archiveAndGoHome()">Save to Archive & Home</button>
       <button class="btn-primary" onclick="exportSportsEngine()" style="background:#16a34a;">Export for SportsEngine</button>
@@ -2069,10 +2328,190 @@ function dismissTransition() {
   }
 }
 
+// === LIVE SPECTATOR ===
+const LIVE_KEY_PREFIX = "baseball_draft_live_";
+let isSpectator = false;
+let spectatorDraftId = null;
+
+function generateDraftId() {
+  return Math.random().toString(36).substring(2, 8).toUpperCase();
+}
+
+function broadcastDraftState() {
+  if (isSpectator || !state.liveDraftId) return;
+  try {
+    const payload = {
+      state: JSON.parse(JSON.stringify(state)),
+      players: JSON.parse(JSON.stringify(PLAYERS)),
+      timestamp: Date.now(),
+    };
+    localStorage.setItem(LIVE_KEY_PREFIX + state.liveDraftId, JSON.stringify(payload));
+  } catch (e) { console.warn("Failed to broadcast:", e); }
+}
+
+function startLiveDraft() {
+  if (!state.liveDraftId) {
+    state.liveDraftId = generateDraftId();
+  }
+  broadcastDraftState();
+  const url = window.location.origin + window.location.pathname + "?spectate=" + state.liveDraftId;
+  if (navigator.clipboard) {
+    navigator.clipboard.writeText(url).then(() => {
+      alert("Live link copied to clipboard!\n\n" + url + "\n\nShare this with coaches to watch the draft live.");
+    });
+  } else {
+    prompt("Share this link with coaches:", url);
+  }
+}
+
+function enterSpectatorMode(draftId) {
+  isSpectator = true;
+  spectatorDraftId = draftId;
+  // Try to load current state
+  loadSpectatorState();
+  // Listen for updates
+  window.addEventListener("storage", onStorageUpdate);
+}
+
+function loadSpectatorState() {
+  try {
+    const raw = localStorage.getItem(LIVE_KEY_PREFIX + spectatorDraftId);
+    if (!raw) return false;
+    const payload = JSON.parse(raw);
+    if (!payload.state || !payload.players) return false;
+    Object.assign(state, payload.state);
+    PLAYERS = payload.players;
+    nextPlayerId = PLAYERS.length > 0 ? Math.max(...PLAYERS.map(p => p.id)) + 1 : 1;
+    render();
+    return true;
+  } catch (e) { return false; }
+}
+
+function onStorageUpdate(e) {
+  if (!isSpectator || !spectatorDraftId) return;
+  if (e.key === LIVE_KEY_PREFIX + spectatorDraftId) {
+    loadSpectatorState();
+  }
+}
+
+function renderSpectatorDraft(app) {
+  const currentTeamId = state.currentPickTeamId;
+  const currentTeam = currentTeamId ? getTeam(currentTeamId) : null;
+  const available = getAvailablePlayers();
+  const phaseLabel = state.phase === "year1" ? "Year 1 (2014)" : "Year 2 (2013)";
+  const currentTeamScore = currentTeam ? calcTotalTeamScore(currentTeam) : 0;
+  const yearFilter = state.phase === "year1" ? 1 : 2;
+
+  let html = `
+    <div style="background:#fef3c7;border:1px solid #fbbf24;border-radius:8px;padding:8px 16px;margin-bottom:12px;text-align:center;font-size:0.9em;">
+      <strong>SPECTATOR MODE</strong> &mdash; Watching draft live (ID: ${esc(spectatorDraftId)})
+    </div>
+    <div class="on-the-clock">
+      <div class="phase-badge">${phaseLabel} &mdash; Pick #${state.pickNumber + 1}</div>
+      <div class="team-name">${currentTeam ? esc(currentTeam.name) : 'Waiting...'}</div>
+      <div class="pick-info">${currentTeam ? `Team Score: ${currentTeamScore}` : 'Draft in progress'}</div>
+    </div>
+    <div class="draft-layout">
+      <div class="available-panel card">
+        <h2>Available Players</h2>
+        <div class="available-scroll">
+          <table class="player-table">
+            <thead><tr><th>#</th><th>Player</th><th>Yr</th><th>DOB</th><th>P</th><th>Hit</th><th>Fld</th><th>2B</th><th>Total</th></tr></thead>
+            <tbody>
+              ${available.length === 0 ? '<tr><td colspan="9" style="text-align:center;color:#94a3b8;padding:20px;">No players available</td></tr>' :
+                (() => {
+                  let rows = "";
+                  let shownSeparator = false;
+                  let currentIdx = 0;
+                  available.forEach(p => {
+                    const isOtherYear = p.year !== yearFilter;
+                    if (isOtherYear && !shownSeparator) {
+                      const otherYearLabel = state.phase === "year1" ? "Year 2 (2013)" : "Year 1 (2014)";
+                      rows += '<tr class="year-separator"><td colspan="9">' + otherYearLabel + ' Players</td></tr>';
+                      shownSeparator = true;
+                      currentIdx = 0;
+                    }
+                    currentIdx++;
+                    const cls = `${p.score === 0 ? 'zero-score' : ''} ${isOtherYear ? 'other-year' : ''}`;
+                    rows += '<tr class="' + cls + '">' +
+                      '<td>' + currentIdx + '</td>' +
+                      '<td>' + esc(p.name) + (p.flag === 'A' ? ' <span class="asst-badge">AC</span>' : '') + '</td>' +
+                      '<td>' + (p.year || "-") + '</td>' +
+                      '<td>' + (p.dob || "N/A") + '</td>' +
+                      '<td>' + (p.pitching || "-") + '</td>' +
+                      '<td>' + (p.hitting || "-") + '</td>' +
+                      '<td>' + (p.fielding || "-") + '</td>' +
+                      '<td>' + (p.time2b || "-") + '</td>' +
+                      '<td><strong>' + p.score + '</strong></td>' +
+                    '</tr>';
+                  });
+                  return rows;
+                })()}
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div class="rosters-panel">
+        ${[...state.draftOrder].sort((a, b) => calcTotalTeamScore(getTeam(a)) - calcTotalTeamScore(getTeam(b))).map(tid => {
+          const t = getTeam(tid);
+          const players = getAllTeamPlayers(t);
+          const teamScore = calcTotalTeamScore(t);
+          const isActive = tid === currentTeamId;
+          return '<div class="roster-card ' + (isActive ? 'active' : '') + '">' +
+            '<div class="team-header"><h3>' + esc(t.name) + (isActive ? ' &#9668;' : '') + '</h3></div>' +
+            '<div class="draft-order-note">Total score: ' + teamScore + '</div>' +
+            '<ul>' +
+            t.preAssigned.filter(id => !getPlayer(id).isCoachOnly).map(id => {
+              const p = getPlayer(id);
+              const badge = p.flag === "C" ? '<span class="head-coach-badge">HC</span>' : '<span class="asst-badge">AC</span>';
+              return '<li>' + esc(p.name) + ' ' + badge + ' <span class="score">' + p.score + '</span></li>';
+            }).join("") +
+            t.drafted.map(id => {
+              const p = getPlayer(id);
+              return '<li>' + esc(p.name) + (p.flag === 'A' ? ' <span class="asst-badge">AC</span>' : '') + ' <span class="score">' + p.score + '</span></li>';
+            }).join("") +
+            (players.length === 0 ? '<li style="color:#cbd5e1;">No players yet</li>' : '') +
+            '</ul></div>';
+        }).join("")}
+      </div>
+    </div>
+    <div class="card" style="margin-top:4px;">
+      <h3>Draft Log</h3>
+      <div class="draft-log">
+        ${state.history.slice().reverse().map(h => {
+          if (h.type === "pre-assign") {
+            const p = getPlayer(h.playerId);
+            const t = getTeam(h.teamId);
+            return '<div class="log-entry" style="color:#1e40af;"><span class="round-label">PRE:</span> ' + esc(t.name) + ' &larr; <strong>' + esc(p.name) + '</strong> (' + p.score + ')</div>';
+          }
+          if (h.type === "edit") {
+            return '<div class="log-entry" style="color:#d97706;"><span class="round-label">EDIT:</span> <strong>' + esc(h.description) + '</strong></div>';
+          }
+          if (h.type === "trade") {
+            const phLbl = h.phase === "year1" ? "Y1" : "Y2";
+            return '<div class="log-entry" style="color:#7c3aed;"><span class="round-label">' + phLbl + ':</span> <strong>' + esc(h.description) + '</strong></div>';
+          }
+          const p = getPlayer(h.playerId);
+          const t = getTeam(h.teamId);
+          const phLbl = h.phase === "year1" ? "Y1" : "Y2";
+          return '<div class="log-entry"><span class="round-label">' + phLbl + ' #' + h.pickNumber + ':</span> ' + esc(t.name) + ' drafted <strong>' + esc(p.name) + '</strong> (' + p.score + ')</div>';
+        }).join("")}
+        ${state.history.length === 0 ? '<div style="color:#94a3b8;padding:8px 0;">No picks yet</div>' : ''}
+      </div>
+    </div>
+  `;
+  app.innerHTML = html;
+}
+
 // === INIT ===
 loadArchive();
-// Don't auto-init teams on home screen - wait for user choice
-render();
+const _urlParams = new URLSearchParams(window.location.search);
+const _spectateId = _urlParams.get("spectate");
+if (_spectateId) {
+  enterSpectatorMode(_spectateId);
+} else {
+  render();
+}
 </script>
 </body>
 </html>
