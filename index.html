@@ -1056,6 +1056,8 @@ function openEditPlayer(playerId, evt) {
   state.editPlayer = {
     id: playerId,
     name: p.name,
+    dob: p.dob || "",
+    year: p.year || 1,
     score: p.score,
     pitching: p.pitching || 0,
     hitting: p.hitting || 0,
@@ -1078,7 +1080,9 @@ function getEditPlayerImpact() {
   const oldScore = p.score;
   const newScore = parseFloat(state.editPlayer.score) || 0;
   const scoreDiff = newScore - oldScore;
-  if (scoreDiff === 0) return null;
+  const yearChanged = (parseInt(state.editPlayer.year) || 1) !== p.year;
+
+  if (scoreDiff === 0 && !yearChanged) return null;
 
   // Find if this player is already drafted
   let draftedByTeam = null;
@@ -1088,26 +1092,34 @@ function getEditPlayerImpact() {
       break;
     }
   }
-  if (!draftedByTeam) return null;
+  if (!draftedByTeam && !yearChanged) return null;
 
-  // Calculate impact on team scores and pick order
-  const currentTeamScore = calcTotalTeamScore(draftedByTeam);
-  const newTeamScore = currentTeamScore + scoreDiff;
   const impacts = [];
-  impacts.push(`${draftedByTeam.name}'s score: ${currentTeamScore} → ${newTeamScore} (${scoreDiff > 0 ? "+" : ""}${scoreDiff})`);
 
-  // Check if pick order would change
-  const otherScores = state.teams.filter(t => t.id !== draftedByTeam.id).map(t => ({
-    name: t.name,
-    score: calcTotalTeamScore(t)
-  }));
-  const currentRank = otherScores.filter(t => t.score < currentTeamScore).length + 1;
-  const newRank = otherScores.filter(t => t.score < newTeamScore).length + 1;
-  if (currentRank !== newRank) {
-    impacts.push(`Draft position changes from #${currentRank} to #${newRank}`);
+  if (yearChanged) {
+    const newYear = parseInt(state.editPlayer.year) || 1;
+    impacts.push(`Year changes from ${p.year} to ${newYear} — player moves to ${newYear === 1 ? "Year 1 (2014)" : "Year 2 (2013)"} pool`);
   }
 
-  return { team: draftedByTeam.name, impacts, scoreDiff };
+  if (draftedByTeam && scoreDiff !== 0) {
+    // Calculate impact on team scores and pick order
+    const currentTeamScore = calcTotalTeamScore(draftedByTeam);
+    const newTeamScore = currentTeamScore + scoreDiff;
+    impacts.push(`${draftedByTeam.name}'s score: ${currentTeamScore} → ${newTeamScore} (${scoreDiff > 0 ? "+" : ""}${scoreDiff})`);
+
+    // Check if pick order would change
+    const otherScores = state.teams.filter(t => t.id !== draftedByTeam.id).map(t => ({
+      name: t.name,
+      score: calcTotalTeamScore(t)
+    }));
+    const currentRank = otherScores.filter(t => t.score < currentTeamScore).length + 1;
+    const newRank = otherScores.filter(t => t.score < newTeamScore).length + 1;
+    if (currentRank !== newRank) {
+      impacts.push(`Draft position changes from #${currentRank} to #${newRank}`);
+    }
+  }
+
+  return { team: draftedByTeam ? draftedByTeam.name : null, impacts, scoreDiff };
 }
 
 function confirmEditPlayer() {
@@ -1117,26 +1129,38 @@ function confirmEditPlayer() {
 
   const oldScore = p.score;
   const newScore = parseFloat(state.editPlayer.score) || 0;
+  const oldDob = p.dob;
+  const oldYear = p.year;
+  const newYear = parseInt(state.editPlayer.year) || 1;
 
   // Apply changes
   p.name = state.editPlayer.name;
+  p.dob = state.editPlayer.dob || "";
+  p.year = newYear;
   p.score = newScore;
   p.pitching = parseFloat(state.editPlayer.pitching) || 0;
   p.hitting = parseFloat(state.editPlayer.hitting) || 0;
   p.fielding = parseFloat(state.editPlayer.fielding) || 0;
   p.time2b = parseFloat(state.editPlayer.time2b) || 0;
 
+  // Build change description
+  const changes = [];
+  if (oldScore !== newScore) changes.push(`Score: ${oldScore} → ${newScore}`);
+  if (oldDob !== p.dob) changes.push(`DOB: ${oldDob || "none"} → ${p.dob || "none"}`);
+  if (oldYear !== newYear) changes.push(`Year: ${oldYear} → ${newYear}`);
+
   // Add note to draft history if provided
   const note = state.editPlayer.note.trim();
-  if (note || oldScore !== newScore) {
+  if (note || changes.length > 0) {
     if (!state.draftNotes) state.draftNotes = [];
     state.draftNotes.push({
       timestamp: new Date().toISOString(),
       playerName: p.name,
-      change: oldScore !== newScore ? `Score: ${oldScore} → ${newScore}` : "Stats updated",
+      change: changes.length > 0 ? changes.join(", ") : "Stats updated",
       note: note,
       pickNumber: state.pickNumber,
     });
+    const changeDesc = changes.length > 0 ? changes.join(", ") : "Stats updated";
     state.history.push({
       type: "edit",
       playerId: p.id,
@@ -1147,7 +1171,7 @@ function confirmEditPlayer() {
       phase: state.phase,
       pickNumber: state.pickNumber,
       timestamp: new Date().toISOString(),
-      description: `Edit: ${p.name} score ${oldScore} → ${newScore}${note ? " (" + note + ")" : ""}`,
+      description: `Edit: ${p.name} — ${changeDesc}${note ? " (" + note + ")" : ""}`,
     });
   }
 
@@ -2029,6 +2053,13 @@ function renderDraft(app) {
         <div class="edit-grid">
           <label>Name</label>
           <input type="text" value="${esc(ep.name)}" onchange="state.editPlayer.name=this.value" />
+          <label>DOB</label>
+          <input type="date" value="${esc(ep.dob)}" onchange="state.editPlayer.dob=this.value" />
+          <label>Year</label>
+          <select onchange="state.editPlayer.year=parseInt(this.value)">
+            <option value="1" ${ep.year === 1 ? 'selected' : ''}>Year 1 (2014)</option>
+            <option value="2" ${ep.year === 2 ? 'selected' : ''}>Year 2 (2013)</option>
+          </select>
           <label>Pitching</label>
           <input type="number" step="0.5" value="${ep.pitching}" onchange="updateEditField('pitching',this.value)" />
           <label>Hitting</label>
