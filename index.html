@@ -1551,8 +1551,16 @@ function render() {
     else {
       app.innerHTML = `<div style="text-align:center;padding:60px 20px;">
         <h2>Waiting for Draft</h2>
-        <p style="color:#64748b;">Spectating draft <strong>${esc(spectatorDraftId)}</strong>. The draft hasn't started yet or has ended.</p>
-        <p style="color:#94a3b8;font-size:0.85em;">This page updates automatically when the host makes changes.</p>
+        <p style="color:#64748b;">Spectating draft <strong>${esc(spectatorDraftId)}</strong></p>
+        <p style="color:#64748b;">The draft hasn't started yet, or the link may not be reachable.</p>
+        <div style="background:#fef3c7;border:1px solid #fbbf24;border-radius:8px;padding:16px;max-width:480px;margin:20px auto;text-align:left;font-size:0.88em;">
+          <strong style="color:#92400e;">Note:</strong> The spectator link must be opened in the <strong>same browser</strong> (not InPrivate/Incognito) as the draft host. Both tabs share data through browser storage.
+        </div>
+        <div style="margin-top:12px;">
+          <div class="spinner-anim" style="display:inline-block;width:24px;height:24px;border:3px solid #e2e8f0;border-top:3px solid #2563eb;border-radius:50%;animation:spin 1s linear infinite;"></div>
+          <p style="color:#94a3b8;font-size:0.85em;margin-top:8px;">Checking for updates every 2 seconds...</p>
+        </div>
+        <style>@keyframes spin { to { transform: rotate(360deg); } }</style>
       </div>`;
     }
     return;
@@ -2399,9 +2407,13 @@ function enterSpectatorMode(draftId) {
   isSpectator = true;
   spectatorDraftId = draftId;
   // Try to load current state
-  loadSpectatorState();
-  // Listen for updates
+  const loaded = loadSpectatorState();
+  // Listen for updates via storage events (cross-tab same profile)
   window.addEventListener("storage", onStorageUpdate);
+  // Also poll periodically as fallback (handles same tab, InPrivate, etc.)
+  setInterval(() => { loadSpectatorState(); }, 2000);
+  // Always render even if no data yet (shows waiting screen)
+  if (!loaded) render();
 }
 
 function loadSpectatorState() {
