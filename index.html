@@ -868,6 +868,40 @@ function deleteArchiveEntry(id) {
   render();
 }
 
+function reopenDraft(archiveId) {
+  const entry = draftArchive.find(e => e.id === archiveId);
+  if (!entry) return;
+  if (!confirm("Reopen this draft for editing? It will be removed from the archive and loaded as the active draft.")) return;
+
+  // Restore state and players from the archived snapshot
+  Object.assign(state, JSON.parse(JSON.stringify(entry.snapshot)));
+  PLAYERS = JSON.parse(JSON.stringify(entry.players));
+  nextPlayerId = PLAYERS.length > 0 ? Math.max(...PLAYERS.map(p => p.id)) + 1 : 1;
+
+  // Set screen to draft (or summary if it was completed)
+  if (state.screen === "home" || state.screen === "archive" || state.screen === "archive-view") {
+    // If draft had completed (was in summary), reopen to summary so user can go back
+    state.screen = state.history && state.history.length > 0 ? "summary" : "draft";
+  }
+
+  // Remove from archive
+  draftArchive = draftArchive.filter(e => e.id !== archiveId);
+  saveArchive();
+
+  // Add a note that this draft was reopened
+  if (!state.draftNotes) state.draftNotes = [];
+  state.draftNotes.push({
+    timestamp: new Date().toISOString(),
+    playerName: "SYSTEM",
+    change: "Draft reopened from archive",
+    note: "",
+    pickNumber: state.pickNumber,
+  });
+
+  saveDraftState();
+  render();
+}
+
 function viewArchiveEntry(id) {
   state.archiveViewId = id;
   state.screen = "archive-view";
@@ -876,6 +910,16 @@ function viewArchiveEntry(id) {
 
 function goHome() {
   state.screen = "home";
+  render();
+}
+
+function returnToDraft() {
+  state.screen = "draft";
+  // Re-determine current pick team if needed
+  if (!state.currentPickTeamId) {
+    const next = getNextPickTeamId();
+    state.currentPickTeamId = next;
+  }
   render();
 }
 
@@ -2062,7 +2106,7 @@ function renderDraft(app) {
           <label>Name</label>
           <input type="text" value="${esc(ep.name)}" onchange="state.editPlayer.name=this.value" />
           <label>DOB</label>
-          <input type="date" value="${esc(ep.dob)}" onchange="state.editPlayer.dob=this.value" />
+          <input type="text" value="${esc(ep.dob)}" placeholder="M/D/YYYY" onchange="state.editPlayer.dob=this.value" style="width:140px;" />
           <label>Year</label>
           <select onchange="state.editPlayer.year=parseInt(this.value)">
             <option value="1" ${ep.year === 1 ? 'selected' : ''}>Year 1 (2014)</option>
@@ -2186,6 +2230,7 @@ function renderSummary(app) {
     </div>` : ''}
     <div class="summary-actions" style="display:flex;flex-wrap:wrap;gap:10px;justify-content:center;">
       <button class="btn-primary" onclick="archiveAndGoHome()">Save to Archive & Home</button>
+      <button class="btn-primary" onclick="returnToDraft()" style="background:#ea580c;">Return to Draft</button>
       <button class="btn-primary" onclick="exportSportsEngine()" style="background:#16a34a;">Export for SportsEngine</button>
       <button class="btn-secondary" onclick="exportDraftHistory()">Draft History (TXT)</button>
       <button class="btn-secondary" onclick="exportDraftHistoryCSV()">Draft History (CSV)</button>
@@ -2226,6 +2271,7 @@ function renderArchive(app) {
             <div class="archive-teams">${e.teamNames.map(n => esc(n)).join(", ")}</div>
             <div class="archive-actions-row" onclick="event.stopPropagation()">
               <button class="btn-secondary btn-sm" onclick="viewArchiveEntry(${e.id})">View</button>
+              <button class="btn-primary btn-sm" onclick="reopenDraft(${e.id})">Reopen Draft</button>
               <button class="btn-danger btn-sm" onclick="deleteArchiveEntry(${e.id})">Delete</button>
             </div>
           </div>
@@ -2255,7 +2301,10 @@ function renderArchiveView(app) {
     <div class="archive-screen">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
         <button class="btn-secondary btn-sm" onclick="state.screen='archive';render();">&larr; Back to Archive</button>
-        <button class="btn-secondary btn-sm" onclick="goHome()">Home</button>
+        <div style="display:flex;gap:8px;">
+          <button class="btn-primary btn-sm" onclick="reopenDraft(${entry.id})">Reopen Draft</button>
+          <button class="btn-secondary btn-sm" onclick="goHome()">Home</button>
+        </div>
       </div>
       <div class="summary-header">
         <h1>${esc(entry.division || "General")} Draft</h1>
